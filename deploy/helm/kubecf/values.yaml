@@ -67,7 +67,8 @@ features:
     labels: {}
   # TODO: suse_buildpacks should be default to true after the opensuse-stemcell-based images are
   # published to docker.io.
-  suse_buildpacks: false
+  suse_buildpacks:
+    enabled: false
 
 operations:
   # A list of configmap names that should be applied to the BOSH manifest.

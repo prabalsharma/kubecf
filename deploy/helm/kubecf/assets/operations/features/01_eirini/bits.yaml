@@ -1,4 +1,4 @@
-{{- if .Values.features.eirini.enabled -}}
+{{- .Files.Get "assets/use-bits-service.yml" }}
 
 - type: replace
   path: /releases/name=bits-service/version
@@ -73,5 +73,3 @@
 {{- range $path, $bytes := .Files.Glob "assets/operations/pre_render_scripts/bits_*" }}
 {{ $root.Files.Get $path }}
 {{- end }}
-
-{{- end}}

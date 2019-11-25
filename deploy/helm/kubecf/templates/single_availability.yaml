@@ -47,7 +47,7 @@ data:
       path: /instance_groups/name=doppler/instances
       value: 1
     - type: replace
-      path: /instance_groups/name=diego-cell/instances
+      path: /instance_groups/name=diego-cell?/instances
       value: 1
     - type: replace
       path: /instance_groups/name=log-api/instances
@@ -75,7 +75,7 @@ data:
     - type: remove
       path: /instance_groups/name=doppler/azs?
     - type: remove
-      path: /instance_groups/name=diego-cell/azs?
+      path: /instance_groups/name=diego-cell?/azs
     - type: remove
       path: /instance_groups/name=log-api/azs?
 

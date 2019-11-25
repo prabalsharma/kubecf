@@ -14,19 +14,32 @@ metadata:
     helm.sh/chart: {{ include "kubecf.chart" .Root }}
 data:
   ops: |-
-    {{- tpl (.Root.Files.Get .Path) .Root | nindent 4 -}}
+    {{- tpl (toString .Data) .Root | nindent 4 -}}
 {{- end -}}
 
 {{- $root := . -}}
-{{- if .Values.features.suse_buildpacks }}
-{{ include "kubecf.ops" (dict "Root" $root "Path" "assets/operations/buildpacks/set_suse_buildpacks.yaml") }}
+
+{{/* Find the list of features available */}}
+{{- $features := dict }}
+{{- range $featureFile, $bytes := .Files.Glob "assets/operations/features/**" }}
+{{- $featureName := index (splitList "/" $featureFile) 3 }}
+{{- $featureData := index $features $featureName | default "" }}
+{{- $_ := set $features $featureName (printf "%s\n%s" $featureData (toString $bytes)) }}
 {{- end }}
+{{/* Dump out the feature ops files */}}
+{{- range $featureName, $featureData := $features }}
+{{- $featureFlag := regexSplit "_" $featureName 2 | last }}
+{{- if index $root.Values.features $featureFlag "enabled" }}
+{{ include "kubecf.ops" (dict "Root" $root "Path" (printf "feature-%s" $featureFlag) "Data" $featureData) }}
+{{- end }}
+{{- end }}
+
 {{- range $path, $bytes := .Files.Glob "assets/operations/instance_groups/*" }}
-{{ include "kubecf.ops" (dict "Root" $root "Path" $path) }}
+{{ include "kubecf.ops" (dict "Root" $root "Path" $path "Data" $bytes) }}
 {{- end }}
 {{- range $path, $bytes := .Files.Glob "assets/operations/temporary/*" }}
-{{ include "kubecf.ops" (dict "Root" $root "Path" $path) }}
+{{ include "kubecf.ops" (dict "Root" $root "Path" $path "Data" $bytes) }}
 {{- end }}
 {{- range $path, $bytes := .Files.Glob "assets/operations/*" }}
-{{ include "kubecf.ops" (dict "Root" $root "Path" $path) }}
+{{ include "kubecf.ops" (dict "Root" $root "Path" $path "Data" $bytes) }}
 {{- end }}

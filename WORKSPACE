@@ -38,7 +38,11 @@ http_archive(
 package(default_visibility = ["//visibility:public"])
 filegroup(
     name = "cf_deployment",
-    srcs = ["cf-deployment.yml", "operations/bits-service/use-bits-service.yml"],
+    srcs = [
+        "cf-deployment.yml",
+        "operations/bits-service/use-bits-service.yml",
+        "operations/experimental/enable-traffic-to-internal-networks.yml", # Required for CredHub
+    ],
 )
 """,
     sha256 = project.cf_deployment.sha256,

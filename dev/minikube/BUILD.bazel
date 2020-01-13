@@ -1,6 +1,9 @@
 package(default_visibility = ["//visibility:public"])
 
-load(":def.bzl", "minikube_start_binary", "minikube_delete_binary")
+load(":def.bzl",
+    minikube_start_binary = "start_binary",
+    minikube_delete_binary = "delete_binary",
+    minikube_load_binary = "load_binary")
 
 minikube_start_binary(
     name = "start",
@@ -8,4 +11,9 @@ minikube_start_binary(
 
 minikube_delete_binary(
     name = "delete",
+)
+
+minikube_load_binary(
+    name = "load",
+    images = ["//deploy/containers/credhub-setup:credhub-setup-bundle.tar"],
 )

@@ -10,7 +10,7 @@ def _minikube_start_impl(ctx):
         export VM_MEMORY="${{VM_MEMORY:-{vm_memory}}}"
         export VM_DISK_SIZE="${{VM_DISK_SIZE:-{vm_disk_size}}}"
         export ISO_URL="${{ISO_URL:-{iso_url}}}"
-        "{script}"
+        exec "{script}"
     """.format(
         minikube = ctx.executable._minikube.path,
         k8s_version = ctx.attr.k8s_version,
@@ -54,7 +54,7 @@ attrs = {
     ),
 }
 
-minikube_start_binary = rule(
+start_binary = rule(
     implementation = _minikube_start_impl,
     attrs = dict({
         "_script": attr.label(
@@ -67,7 +67,7 @@ minikube_start_binary = rule(
     executable = True,
 )
 
-minikube_delete_binary = rule(
+delete_binary = rule(
     implementation = _minikube_start_impl,
     attrs = dict({
         "_script": attr.label(
@@ -77,5 +77,59 @@ minikube_delete_binary = rule(
             executable = True,
         ),
     }, **attrs),
+    executable = True,
+)
+
+def _minikube_load_impl(ctx):
+    executable = ctx.actions.declare_file(ctx.attr.name)
+    contents = """
+        set -o errexit -o xtrace
+        cat "$0"
+        export MINIKUBE="{minikube}"
+        DOCKER_IMAGES=()
+    """.format(minikube = ctx.executable._minikube.path)
+
+    # Add the docker saved tarballs to load
+    runfiles = [
+        ctx.executable._minikube,
+        ctx.executable._script,
+    ]
+    for image in ctx.attr.images:
+        for file in image.files.to_list():
+            contents += """
+                DOCKER_IMAGES+=("{path}")
+            """.format(path = file.short_path)
+            runfiles += [file]
+
+    contents += """
+        source "{script}"
+    """.format(script = ctx.executable._script.path)
+    ctx.actions.write(executable, contents, is_executable = True)
+    return [DefaultInfo(
+        executable = executable,
+        runfiles = ctx.runfiles(files = runfiles),
+    )]
+
+load_binary = rule(
+    implementation = _minikube_load_impl,
+    attrs = {
+        "images": attr.label_list(
+            allow_empty = True,
+            doc = "Docker images to pre-load into the cluster",
+            allow_files = [".tar"],
+        ),
+        "_script": attr.label(
+            allow_single_file = True,
+            cfg = "host",
+            default = "//dev/minikube:load.sh",
+            executable = True,
+        ),
+        "_minikube": attr.label(
+            allow_single_file = True,
+            cfg = "host",
+            default = "@minikube//:minikube",
+            executable = True,
+        ),
+    },
     executable = True,
 )

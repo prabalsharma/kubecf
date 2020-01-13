@@ -129,6 +129,10 @@ project = struct(
             },
         },
     ),
+    rules_docker = struct(
+        commit = "0.13.0",
+        sha256 = "df13123c44b4a4ff2c2f337b906763879d94871d16411bf82dcfeba892b58607",
+    ),
     rules_python = struct(
         commit = "94677401bc56ed5d756f50b441a6a5c7f735a6d4",
         sha256 = "acbd018f11355ead06b250b352e59824fbb9e77f4874d250d230138231182c1c",

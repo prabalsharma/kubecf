@@ -1,0 +1,32 @@
+# Extra job to configure credhub access
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-credhub-setup
+  namespace: {{ .Release.Namespace | quote }}
+spec:
+  template:
+    metadata:
+      annotations:
+        quarks.cloudfoundry.org/consumes: credhub.credhub
+        quarks.cloudfoundry.org/deployment: {{ .Release.Name }}
+    spec:
+      containers:
+      - image: << .values.images >>
+        name: credhub-setup
+        command: [/usr/bin/sleep, 1d]
+        # /quarks/link/{{.Release.Name}}/link.yaml
+      restartPolicy: Never
+      volumes:
+      - name: config
+        secret:
+          secretName: {{ .Release.Name }}-credhub-setup-config
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ .Release.Name }}-credhub-setup-config
+  namespace: {{ .Release.Namespace | quote }}
+stringData:
+  credhub-location: {{ .Release.Name }}-credhub.{{ .Release.Name }}.svc

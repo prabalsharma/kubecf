@@ -83,28 +83,28 @@ delete_binary = rule(
 def _minikube_load_impl(ctx):
     executable = ctx.actions.declare_file(ctx.attr.name)
     contents = """
-        set -o errexit -o xtrace
-        cat "$0"
+        set -o errexit
         export MINIKUBE="{minikube}"
         DOCKER_IMAGES=()
-    """.format(minikube = ctx.executable._minikube.path)
+    """.format(minikube = ctx.executable._minikube.short_path)
 
     # Add the docker saved tarballs to load
-    runfiles = [
-        ctx.executable._minikube,
-        ctx.executable._script,
-    ]
     for image in ctx.attr.images:
         for file in image.files.to_list():
             contents += """
                 DOCKER_IMAGES+=("{path}")
             """.format(path = file.short_path)
-            runfiles += [file]
 
     contents += """
         source "{script}"
     """.format(script = ctx.executable._script.path)
     ctx.actions.write(executable, contents, is_executable = True)
+
+    runfiles = [
+        ctx.executable._minikube,
+        ctx.executable._script,
+    ] + ctx.files.images
+
     return [DefaultInfo(
         executable = executable,
         runfiles = ctx.runfiles(files = runfiles),

@@ -341,4 +341,7 @@
 {{ $root.Files.Get $path }}
 {{- end }}
 
+{{- else }}
+# Eirini is disabled
+
 {{- end }}

@@ -4,6 +4,7 @@ load("@bazel_tools//tools/build_defs/pkg:pkg.bzl", "pkg_tar")
 load("//deploy/helm/kubecf:defs.bzl", "metadata_file_generator")
 load("//rules/helm:def.bzl", helm_package = "package")
 load("//rules/yaml_extractor:defs.bzl", "yaml_extractor")
+load("//rules/gomplate:def.bzl", "gomplate")
 load("//:def.bzl", "project")
 
 metadata_file_generator(
@@ -19,8 +20,25 @@ filegroup(
         exclude = [
             "**/BUILD.bazel",
             "**/defs.bzl",
+            "templates/*.yaml",
         ],
     ),
+)
+
+[gomplate(
+    name = "templated_{}".format(file),
+    src = file,
+    left_delim = "<<",
+    right_delim = ">>",
+    data = {
+        "images": Label("//deploy/containers/credhub-setup:credhub-setup-bundle"),
+    },
+) for file in glob(["templates/*.yaml"])]
+
+pkg_tar(
+    name = "chart_files_templated",
+    strip_prefix = "./",
+    srcs = ["templated_{}".format(f) for f in glob(["templates/*.yaml"])]
 )
 
 pkg_tar(
@@ -64,6 +82,7 @@ helm_package(
         "//bosh/releases:pre_render_scripts",
         ":cf_deployment",
         ":extracted_jobs",
+        ":chart_files_templated",
     ],
     chart_name = "kubecf",
     chart_version = project.chart_version,

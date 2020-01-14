@@ -15,6 +15,19 @@ project = struct(
             },
             version = "19.03.5",
         ),
+        "gomplate": struct(
+            sha256 = {
+                "darwin":  "0631be762e2559f6c889aa22a3f2c6291575f97f7b2d47b8c2c0f6951da7b6d8",
+                "linux":   "0ec9907db0e31842d954e7644c928d1b5e0eaf0f112096a0fc0d923de34cb704",
+                "windows": "a0abc996290a1a0a6c120a03adc4f3bf6de12bdc3280f280ebaa7094570a8fe1",
+            },
+            url = {
+                "darwin":  "https://github.com/hairyhenderson/gomplate/releases/download/v{version}/gomplate_darwin-amd64",
+                "linux":   "https://github.com/hairyhenderson/gomplate/releases/download/v{version}/gomplate_linux-amd64",
+                "windows": "https://github.com/hairyhenderson/gomplate/releases/download/v{version}/gomplate_windows-amd64.exe",
+            },
+            version = "3.6.0",
+        ),
         "helm": struct(
             sha256 = {
                 "darwin":  "34fc397ec4a992a451d130a962944315ca782242bbd05a8d732a2e74ca2b9153",

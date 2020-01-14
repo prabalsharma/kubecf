@@ -1,4 +1,3 @@
-load("@bazel_tools//tools/build_defs/pkg:pkg.bzl", "pkg_tar")
 load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
 load("@io_bazel_rules_docker//go:image.bzl", "go_image")
 load("@io_bazel_rules_docker//container:container.bzl",
@@ -29,11 +28,18 @@ go_image(
     visibility = ["//visibility:public"],
 )
 
+genrule(
+    name = "credhub-setup-tag",
+    outs = ["tag.txt"],
+    cmd = """awk '$$1 == "BUILD_TIMESTAMP" { print $$2 }' bazel-out/volatile-status.txt > $@""",
+    stamp = True,
+)
+
 # The bundle is only required to rename our image
 container_bundle(
     name = "credhub-setup-bundle",
     images = {
-        "cfcontainerization/credhub-setup:{BUILD_TIMESTAMP}": ":credhub-setup-image",
+        ":credhub-setup-tag": ":credhub-setup-image",
     },
     visibility = ["//visibility:public"],
 )

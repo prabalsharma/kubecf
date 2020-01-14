@@ -20,6 +20,7 @@ def _package_impl(ctx):
             "OUTPUT_FILENAME": output_filename,
             "OUTPUT_TGZ": output_tgz.path,
         },
+        arguments = [f.path for f in ctx.files.srcs]
     )
     return [DefaultInfo(files = depset(outputs))]
 

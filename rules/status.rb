@@ -17,10 +17,18 @@ def status_containers
         name = line[3..-1].split('/')[2]
         dirty << name
     end
-    Hash[hashes.map do |key, value|
-        value += '-dirty' if dirty.include? key
-        ["STABLE_CONTAINERS_#{key.upcase}", value]
-    end]
+
+    results = Hash.new
+    hashes.each_pair do |key, value|
+        name = "STABLE_CONTAINERS_#{key.upcase}"
+        if dirty.include? key
+            results[name] = "#{value}-dirty"
+            results["#{name}_PULL_POLICY"] = 'Always'
+        else
+            results[name] = value
+        end
+    end
+    results
 end
 
 results = Hash.new

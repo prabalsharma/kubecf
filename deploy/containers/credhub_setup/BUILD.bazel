@@ -49,6 +49,7 @@ gomplate_library(
     datasources = {
         "//:workspace_status": "workspace_status",
     },
+    visibility = ["//visibility:public"],
 )
 
 container_push(

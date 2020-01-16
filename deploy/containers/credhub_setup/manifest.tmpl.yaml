@@ -13,6 +13,7 @@ spec:
     spec:
       containers:
       - image: credhub-setup:<< (ds "workspace_status").STABLE_CONTAINERS_CREDHUB_SETUP >>
+        imagePullPolicy: << default "~" (index (ds "workspace_status") "STABLE_CONTAINERS_CREDHUB_SETUP_PULL_POLICY") >>
         name: credhub-setup
         command: [/usr/bin/sleep, 1d]
         # /quarks/link/{{.Release.Name}}/link.yaml

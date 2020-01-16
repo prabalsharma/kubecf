@@ -34,7 +34,7 @@ go_image(
 container_bundle(
     name = "credhub_setup_bundle",
     images = {
-        "credhub-setup:{BUILD_TIMESTAMP}": ":credhub_setup_image",
+        "credhub-setup:{STABLE_CONTAINERS_CREDHUB_SETUP}": ":credhub_setup_image",
     },
     visibility = ["//visibility:public"],
 )

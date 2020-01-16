@@ -12,7 +12,7 @@ spec:
         quarks.cloudfoundry.org/deployment: {{ .Release.Name }}
     spec:
       containers:
-      - image: credhub-setup:<< (ds "workspace_status").BUILD_TIMESTAMP >>
+      - image: credhub-setup:<< (ds "workspace_status").STABLE_CONTAINERS_CREDHUB_SETUP >>
         name: credhub-setup
         command: [/usr/bin/sleep, 1d]
         # /quarks/link/{{.Release.Name}}/link.yaml

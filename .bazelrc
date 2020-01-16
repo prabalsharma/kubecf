@@ -1,2 +1,7 @@
 test \
   --test_output=errors
+
+build \
+  --workspace_status_command rules/status.rb
+
+try-import user.bazelrc

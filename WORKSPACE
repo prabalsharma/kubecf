@@ -98,3 +98,7 @@ http_file(
     sha256 = project.mysql_chart.sha256,
     urls = ["https://kubernetes-charts.storage.googleapis.com/mysql-{}.tgz".format(project.mysql_chart.version)],
 )
+
+load("@rules_gomplate//:repositories.bzl", "gomplate_repositories")
+
+gomplate_repositories()

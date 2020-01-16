@@ -15,19 +15,6 @@ project = struct(
             },
             version = "19.03.5",
         ),
-        "gomplate": struct(
-            sha256 = {
-                "darwin":  "0631be762e2559f6c889aa22a3f2c6291575f97f7b2d47b8c2c0f6951da7b6d8",
-                "linux":   "0ec9907db0e31842d954e7644c928d1b5e0eaf0f112096a0fc0d923de34cb704",
-                "windows": "a0abc996290a1a0a6c120a03adc4f3bf6de12bdc3280f280ebaa7094570a8fe1",
-            },
-            url = {
-                "darwin":  "https://github.com/hairyhenderson/gomplate/releases/download/v{version}/gomplate_darwin-amd64",
-                "linux":   "https://github.com/hairyhenderson/gomplate/releases/download/v{version}/gomplate_linux-amd64",
-                "windows": "https://github.com/hairyhenderson/gomplate/releases/download/v{version}/gomplate_windows-amd64.exe",
-            },
-            version = "3.6.0",
-        ),
         "helm": struct(
             sha256 = {
                 "darwin":  "34fc397ec4a992a451d130a962944315ca782242bbd05a8d732a2e74ca2b9153",
@@ -167,6 +154,12 @@ project = struct(
             version = "94677401bc56ed5d756f50b441a6a5c7f735a6d4",
             sha256 = "acbd018f11355ead06b250b352e59824fbb9e77f4874d250d230138231182c1c",
             strip_prefix = "rules_python-{version}",
+        ),
+        "rules_gomplate": struct(
+            urls = ["https://github.com/codelogia/rules_gomplate/archive/{version}.tar.gz"],
+            version = "3ab8ff7a25d9c13c8a9d2c5a122241c745a92570",
+            sha256 = "5f2c173824020dea6923e0fa20d13df4a1d4cbe264acc009efa41f8a1a50e7d4",
+            strip_prefix = "rules_gomplate-{version}",
         ),
     },
 

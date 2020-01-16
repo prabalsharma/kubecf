@@ -1,0 +1,61 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@io_bazel_rules_docker//go:image.bzl", "go_image")
+load(
+    "@io_bazel_rules_docker//container:container.bzl",
+    "container_bundle",
+    "container_push",
+)
+load("@rules_gomplate//:defs.bzl", "gomplate_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["main.go"],
+    importpath = "github.com/example/project/deploy/containers/credhub_setup",
+    visibility = ["//visibility:private"],
+)
+
+go_binary(
+    name = "credhub_setup",
+    embed = [":go_default_library"],
+    visibility = ["//visibility:private"],
+)
+
+go_image(
+    name = "credhub_setup_image",
+    embed = [":go_default_library"],
+    pure = "on",
+    static = "on",
+    goos = "linux",
+    goarch = "amd64",
+    visibility = ["//visibility:private"],
+)
+
+# The bundle is only required to rename and tag our image.
+container_bundle(
+    name = "credhub_setup_bundle",
+    images = {
+        "credhub-setup:{BUILD_TIMESTAMP}": ":credhub_setup_image",
+    },
+    visibility = ["//visibility:public"],
+)
+
+gomplate_library(
+    name = "credhub_setup_manifest",
+    templates = {
+        ":manifest.tmpl.yaml": "credhub_setup.yaml",
+    },
+    left_delim = "<<",
+    right_delim = ">>",
+    datasources = {
+        "//:workspace_status": "workspace_status",
+    },
+)
+
+container_push(
+    name = "credhub_setup_push",
+    format = "OCI",
+    image = ":credhub_setup_image",
+    registry = "{BUILD_HOST}:5000",
+    repository = "cfcontainerization/credhub-setup",
+    tag = "{BUILD_TIMESTAMP}",
+)

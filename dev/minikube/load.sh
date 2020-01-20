@@ -12,5 +12,3 @@ eval $("${MINIKUBE}" docker-env)
 if [[ "${#DOCKER_IMAGES[@]}" -gt 0 ]] ; then
   docker load --input "${DOCKER_IMAGES[@]}"
 fi
-
-exit 1

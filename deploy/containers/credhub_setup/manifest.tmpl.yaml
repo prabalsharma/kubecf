@@ -8,20 +8,35 @@ spec:
   template:
     metadata:
       annotations:
-        quarks.cloudfoundry.org/consumes: credhub.credhub
+        quarks.cloudfoundry.org/consumes: >
+          [
+            { "name": "credhub", "type": "credhub" },
+            { "name": "cloud_controller_https_endpoint", "type": "cloud_controller_https_endpoint" }
+          ]
         quarks.cloudfoundry.org/deployment: {{ .Release.Name }}
     spec:
       containers:
       - image: credhub-setup:<< (ds "workspace_status").STABLE_CONTAINERS_CREDHUB_SETUP >>
-        imagePullPolicy: << default "~" (index (ds "workspace_status") "STABLE_CONTAINERS_CREDHUB_SETUP_PULL_POLICY") >>
         name: credhub-setup
-        command: [/usr/bin/sleep, 1d]
         # /quarks/link/{{.Release.Name}}/link.yaml
+        volumeMounts:
+        - name: config
+          mountPath: /config
+          readOnly: true
+        - name: pod-info
+          mountPath: /run/pod-info
+          readOnly: true
       restartPolicy: Never
       volumes:
       - name: config
         secret:
           secretName: {{ .Release.Name }}-credhub-setup-config
+      - name: pod-info
+        downwardAPI:
+          items:
+          - fieldRef:
+              fieldPath: metadata.annotations['quarks.cloudfoundry.org/deployment']
+            path: deployment-name
 
 ---
 apiVersion: v1

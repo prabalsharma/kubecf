@@ -4,7 +4,10 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file"
 load("//rules/external_binary:def.bzl", "external_binary")
 load(":def.bzl", "project")
 
-[external_binary(name = name, config = config) for name, config in project.external_binaries.items()]
+[external_binary(
+    name = name,
+    config = config,
+) for name, config in project.external_binaries.items()]
 
 [http_archive(
     name = name,
@@ -14,19 +17,26 @@ load(":def.bzl", "project")
 ) for name, config in project.bazel_libs.items()]
 
 load("@io_bazel_rules_docker//repositories:repositories.bzl", container_repositories = "repositories")
+
 container_repositories()
 
 load("@io_bazel_rules_docker//repositories:deps.bzl", container_deps = "deps")
+
 container_deps()
 
 load("@io_bazel_rules_go//go:deps.bzl", "go_rules_dependencies", "go_register_toolchains")
+
 go_rules_dependencies()
+
 go_register_toolchains()
 
-load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
+# gazelle:repo bazel_gazelle
+load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies", "go_repository")
+
 gazelle_dependencies()
 
 load("@io_bazel_rules_docker//go:image.bzl", _go_image_repos = "repositories")
+
 _go_image_repos()
 
 load("@rules_python//python:pip.bzl", "pip_repositories", "pip3_import")
@@ -102,3 +112,6 @@ http_file(
 load("@rules_gomplate//:repositories.bzl", "gomplate_repositories")
 
 gomplate_repositories()
+
+load("//rules:gazelle.bzl", "gazelle_generated_repositories")
+gazelle_generated_repositories()

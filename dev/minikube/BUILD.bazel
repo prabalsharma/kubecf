@@ -17,5 +17,5 @@ minikube_delete_binary(
 
 minikube_load_binary(
     name = "load",
-    images = ["//deploy/containers/credhub-setup:credhub-setup-bundle.tar"],
+    images = ["//deploy/containers/credhub_setup:credhub_setup_bundle.tar"],
 )

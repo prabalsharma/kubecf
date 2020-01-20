@@ -9,9 +9,14 @@ load("@rules_gomplate//:defs.bzl", "gomplate_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["main.go"],
+    srcs = [
+        "main.go",
+        "resolver.go",
+        "secgroup.go",
+    ],
     importpath = "github.com/example/project/deploy/containers/credhub_setup",
     visibility = ["//visibility:private"],
+    deps = ["@org_cloudfoundry_code_cli//cf/configuration/coreconfig:go_default_library"],
 )
 
 go_binary(

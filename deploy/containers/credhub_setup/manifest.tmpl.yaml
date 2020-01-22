@@ -18,31 +18,32 @@ spec:
       containers:
       - image: credhub-setup:<< (ds "workspace_status").STABLE_CONTAINERS_CREDHUB_SETUP >>
         name: credhub-setup
-        # /quarks/link/{{.Release.Name}}/link.yaml
+        env:
+        - name: OAUTH_CLIENT
+          value: credhub_setup
+        - name: OAUTH_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Release.Name }}.var-uaa-clients-credhub-setup-secret
+              key: password
         volumeMounts:
-        - name: config
-          mountPath: /config
-          readOnly: true
         - name: pod-info
           mountPath: /run/pod-info
           readOnly: true
+        - name: uaa-ca-cert
+          mountPath: /run/uaa-ca-cert
+          readOnly: true
       restartPolicy: Never
       volumes:
-      - name: config
-        secret:
-          secretName: {{ .Release.Name }}-credhub-setup-config
       - name: pod-info
         downwardAPI:
           items:
           - fieldRef:
               fieldPath: metadata.annotations['quarks.cloudfoundry.org/deployment']
             path: deployment-name
-
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: {{ .Release.Name }}-credhub-setup-config
-  namespace: {{ .Release.Namespace | quote }}
-stringData:
-  credhub-location: {{ .Release.Name }}-credhub.{{ .Release.Name }}.svc
+      - name: uaa-ca-cert
+        secret:
+          secretName: {{ .Release.Name }}.var-router-ca
+          items:
+          - key: certificate
+            path: ca.crt

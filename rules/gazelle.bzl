@@ -267,8 +267,8 @@ def gazelle_generated_repositories():
     go_repository(
         name = "com_github_sermodigital_jose",
         importpath = "github.com/SermoDigital/jose",
-        sum = "h1:atYaHPD3lPICcbK1owly3aPm0iaJGSGPi0WD4vLznv8=",
-        version = "v0.9.1",
+        sum = "h1:koK7z0nSsRiRiBWwa+E714Puh+DO+ZRdIyAXiXzL+lg=",
+        version = "v0.9.2-0.20161205224733-f6df55f235c2",
     )
     go_repository(
         name = "com_github_sirupsen_logrus",
@@ -375,8 +375,8 @@ def gazelle_generated_repositories():
     go_repository(
         name = "org_golang_x_sync",
         importpath = "golang.org/x/sync",
-        sum = "h1:wMNYb4v58l5UBM7MYRLPG6ZhfOqbKu7X5eyFl8ZhKvA=",
-        version = "v0.0.0-20180314180146-1d60e4601c6f",
+        sum = "h1:YUO/7uOKsKeq9UokNS62b8FYywz3ker1l1vDZRCRefw=",
+        version = "v0.0.0-20181221193216-37e7f081c4d4",
     )
     go_repository(
         name = "org_golang_x_sys",
@@ -401,4 +401,22 @@ def gazelle_generated_repositories():
         importpath = "golang.org/x/xerrors",
         sum = "h1:9zdDQZ7Thm29KFXgAX/+yaf3eVbP7djjWp/dXAppNCc=",
         version = "v0.0.0-20190717185122-a985d3407aa7",
+    )
+    go_repository(
+        name = "com_google_cloud_go",
+        importpath = "cloud.google.com/go",
+        sum = "h1:eOI3/cP2VTU6uZLDYAoic+eyzzB9YyGmJ7eIjl8rOPg=",
+        version = "v0.34.0",
+    )
+    go_repository(
+        name = "org_golang_google_appengine",
+        importpath = "google.golang.org/appengine",
+        sum = "h1:/wp5JvzpHIxhs/dumFmF7BXTf3Z+dd4uXta4kVyO508=",
+        version = "v1.4.0",
+    )
+    go_repository(
+        name = "org_golang_x_oauth2",
+        importpath = "golang.org/x/oauth2",
+        sum = "h1:TzXSXBo42m9gQenoE3b9BGiEpg5IG2JkU5FkPIawgtw=",
+        version = "v0.0.0-20200107190931-bf48bf16ab8d",
     )

@@ -6,9 +6,26 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"sync"
 	"time"
 )
+
+var customResolver *net.Resolver
+
+// setupResolver overrides the default DNS resolver to a custom one; this should
+// only be called once.
+func setupResolver() error {
+	if customResolver == nil {
+		newResolver, err := getDNSResolver()
+		if err != nil {
+			return err
+		}
+		customResolver = newResolver
+	}
+	net.DefaultResolver = customResolver
+	return nil
+}
 
 // getDNSResolver returns a custom DNS resolver that uses the BOSH-DNS service.
 func getDNSResolver() (*net.Resolver, error) {
@@ -59,7 +76,7 @@ func resolveCredHubAddrsGivenLink(ctx context.Context, link credhubLinkData) ([]
 		return nil, fmt.Errorf("could not get DNS resolver: %w", err)
 	}
 	var addrs []string
-	fmt.Printf("Looking up credhub service %s", credhubURL.Hostname())
+	fmt.Fprintf(os.Stderr, "Looking up credhub service %s", credhubURL.Hostname())
 	for {
 		addrs, err = resolver.LookupHost(ctx, credhubURL.Hostname())
 		var dnsError *net.DNSError
@@ -70,28 +87,29 @@ func resolveCredHubAddrsGivenLink(ctx context.Context, link credhubLinkData) ([]
 			// Unexpected DNS error; report and die
 			return nil, fmt.Errorf("error looking up host %s: %w", credhubURL.Hostname(), err)
 		}
-		fmt.Printf(".")
+		fmt.Fprintf(os.Stderr, ".")
+		_ = os.Stderr.Sync()
 		time.Sleep(10 * time.Second)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("could not lookup credhub host %s: %w",
 			credhubURL.Hostname(), err)
 	}
-	fmt.Printf("\nFound credhub service address: %v\n", addrs)
+	fmt.Fprintf(os.Stderr, "\nFound credhub service address: %v\n", addrs)
 
 	return addrs, nil
 }
 
-// resolveCredHubAddrs returns the IP addresses of the CredHub service.
-func resolveCredHubAddrs(ctx context.Context) ([]string, error) {
+// resolveCredHubInfo returns the IP addresses of the CredHub service and the port.
+func resolveCredHubInfo(ctx context.Context) ([]string, int, error) {
 	var link credhubLinkData
 	err := resolveLink("credhub", &link)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	addrs, err := resolveCredHubAddrsGivenLink(ctx, link)
 	if err != nil {
-		return nil, fmt.Errorf("could not resolve credhub address: %w", err)
+		return nil, 0, fmt.Errorf("could not resolve credhub address: %w", err)
 	}
-	return addrs, nil
+	return addrs, link.CredHub.Port, nil
 }

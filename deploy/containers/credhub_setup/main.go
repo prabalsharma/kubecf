@@ -38,56 +38,36 @@ func resolveLink(name string, data interface{}) error {
 	if err != nil {
 		return fmt.Errorf("could not read links: %w", err)
 	}
-	fmt.Printf("Successfully resolved link: %+v\n", data)
+	fmt.Fprintf(os.Stderr, "Successfully resolved link: %+v\n", data)
 	return nil
 }
 
-type securityGroupEntry struct {
-	Protocol    string
-	Destination string
-	Ports       string
-	Code        int `json:",omit_empty"`
-	Type        int `json:",omit_empty"`
-	Log         bool
-	Description string
-}
-
-func buildSecurityGroupList(addrs []string, port int) []securityGroupEntry {
-	entries := make([]securityGroupEntry, 0, len(addrs))
-	for _, addr := range addrs {
-		entries = append(entries, securityGroupEntry{
-			Protocol:    "tcp",
-			Destination: addr,
-			Ports:       fmt.Sprintf("%d", port),
-			Description: "CredHub service access",
-		})
-	}
-	return entries
-}
-
-func setupCredHubApplicationSecurityGroups(ctx context.Context) error {
-	addrs, err := resolveCredHubAddrs(ctx)
+func process(ctx context.Context) error {
+	err := setupResolver()
 	if err != nil {
-		return fmt.Errorf("could not resolve credhub address: %w", err)
+		return fmt.Errorf("could not set up custom DNS resolver: %w", err)
 	}
-
-	fmt.Printf("%v\n", addrs)
-
-	repo, err := getRepository()
+	addrs, port, err := resolveCredHubInfo(ctx)
 	if err != nil {
-		return fmt.Errorf("could not get API connection: %w", err)
+		return err
 	}
-	fmt.Printf("Got repo: %+v\n", repo)
-	//secGroups := buildSecurityGroupList(addrs, link.CredHub.Port)
+	client, err := authenticate(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Got client: %+v\n", client)
+	err = setupCredHubApplicationSecurityGroups(ctx, client, addrs, port)
+	if err != nil {
+		return fmt.Errorf("error setting security groups: %w", err)
+	}
 	return nil
-
 }
 
 func main() {
 	ctx := context.Background()
-	err := setupCredHubApplicationSecurityGroups(ctx)
+	err := process(ctx)
 	if err != nil {
-		fmt.Printf("Could not set up CredHub application security groups: %v", err)
+		fmt.Fprintf(os.Stderr, "Could not set up CredHub application security groups: %v", err)
 		os.Exit(1)
 	}
 	for {

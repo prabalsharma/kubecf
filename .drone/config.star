@@ -1,6 +1,18 @@
+"""
+Drone pipeline definition in Starlark
+See https://docs.drone.io/pipeline/scripting/starlark/ for details.
+"""
 DRONE_BASE_PATH = ".drone/pipelines/default"
 
 def main(ctx):
+    """Drone starlark convert entry point
+
+    Args:
+      ctx: Drone context
+
+    Returns:
+      Drone pipeline
+    """
     pipeline = {
         "kind": "pipeline",
         "type": "docker",
@@ -105,6 +117,19 @@ def step(
     network_mode = None,
     when = None,
 ):
+    """step: template for one step in the pipeline
+
+    Args:
+      name: The name of the CI step
+      commands: List of commands to execute
+      extra_volumes: List of extra volumes to mount
+      image: The docker image used to launch the container for the step
+      network_mode: (Optional) The docker network mode
+      when: (Optional) Only run the step if the given conditions match
+
+    Returns:
+      Dict of the drone step definition
+    """
     step = {
         "name": name.replace("_", "-"),
         "commands": commands,

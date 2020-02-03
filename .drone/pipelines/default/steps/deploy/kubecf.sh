@@ -6,12 +6,14 @@ set -o errexit -o nounset -o pipefail
 source ".drone/pipelines/default/runtime/binaries.sh"
 # shellcheck disable=SC1091
 source ".drone/pipelines/default/runtime/config.sh"
+# shellcheck disable=SC1091
+source ".drone/pipelines/default/runtime/helpers.sh"
 
 node_ip=$(kubectl get node kubecf-control-plane \
   --output jsonpath='{ .status.addresses[?(@.type == "InternalIP")].address }')
 system_domain="${node_ip}.nip.io"
 
-chart="output/kubecf.tgz"
+chart="$(get_output_file "${KUBECF_CHART_TARGET%:*}")"
 
 # Render and apply the kubecf chart.
 helm template "${chart}" \

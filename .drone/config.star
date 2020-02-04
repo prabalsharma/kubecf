@@ -58,6 +58,18 @@ def main(ctx):
         network_mode = "host",
     ))
 
+    steps.append(step(
+        name = "deploy:load-images",
+        commands = [
+            "{base_path}/steps/deploy/load_images.sh".format(base_path = DRONE_BASE_PATH),
+        ],
+        extra_volumes = [
+            docker_sock_volume(),
+            kube_volume(),
+        ],
+        network_mode = "host",
+    ))
+
     for component in ["cf_operator", "kubecf"]:
         steps.append(step(
             name = "deploy:{component}".format(component = component),

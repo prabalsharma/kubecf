@@ -99,6 +99,15 @@
     name: bits-service
   {{- end }}
 
+# Add scf-helper release
+{{- if .Values.features.credhub.enabled }}
+{{- $releases = append $releases "scf-helper" }}
+- type: replace
+  path: /releases/name=scf-helper?
+  value:
+    name: scf-helper
+{{- end }} # scf-helper release
+
 # Loop over the releases, replacing the url and stemcell, and the version when appropriate.
 {{- $root := . }}
 {{- range $release := $releases }}

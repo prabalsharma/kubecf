@@ -37,20 +37,14 @@
   value:
     name: credhub-setup
     release: scf-helper
-    properties:
+    properties: &credhub_setup_job_properties
       credhub_setup:
-        oauth_secret:
-          ((credhub_setup_client_secret))
+        ports: *credhub_tls_port
+        oauth_secret: ((credhub_setup_client_secret))
+      uaa:
+        ca_cert: ((uaa_ca.certificate))
       quarks:
         envs:
-        - name: CF_API
-          value: https://cloud-controller-ng.service.cf.internal:9024
-        - name: CF_CA
-          value: ((cc_tls.ca))
-        - name: CF_USERNAME
-          value: credhub_setup_client
-        - name: CF_PASSWORD
-          value: ((credhub_setup_client_secret))
         - name: POD_NAME
           valueFrom:
             fieldRef:
@@ -61,8 +55,6 @@
             fieldRef:
               apiVersion: v1
               fieldPath: status.podIP
-        - name: POD_PORTS
-          value: *credhub_tls_port
 
 - type: replace
   path: /instance_groups/name=uaa/jobs/-
@@ -70,31 +62,10 @@
     name: credhub-setup
     release: scf-helper
     properties:
+      <<: *credhub_setup_job_properties
       credhub_setup:
-        oauth_secret:
-          ((credhub_setup_client_secret))
-      quarks:
-        envs:
-        - name: CF_API
-          value: https://cloud-controller-ng.service.cf.internal:9024
-        - name: CF_CA
-          value: ((cc_tls.ca))
-        - name: CF_USERNAME
-          value: credhub_setup_client
-        - name: CF_PASSWORD
-          value: ((credhub_setup_client_secret))
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              apiVersion: v1
-              fieldPath: metadata.name
-        - name: POD_IP
-          valueFrom:
-            fieldRef:
-              apiVersion: v1
-              fieldPath: status.podIP
-        - name: POD_PORTS
-          value: "8443"
+        ports: 8443
+        oauth_secret: ((credhub_setup_client_secret))
 
 - type: replace
   path: /instance_groups/name=uaa/jobs/name=uaa/properties/uaa/clients/credhub_setup_client?

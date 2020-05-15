@@ -91,12 +91,9 @@ jobs:
       run: |
         bazel run //dev/kubecf:apply
     - name: Wait for KubeCF
-      run: |
-        kubectl get pods --namespace kubecf --watch &
-        WATCH_PID=$!
-        sleep 1200
-        kill $WATCH_PID
-        parallel --verbose --retries 40 --delay 15 ::: 'kubectl wait --for=condition=Ready -n kubecf --timeout=2400s --selector=quarks.cloudfoundry.org/deployment-name=kubecf pod'
+      run: >
+        parallel --verbose --retries 120 --delay 15 ::: 
+        'kubectl wait --for=condition=Ready -n kubecf --timeout=2400s --selector=quarks.cloudfoundry.org/deployment-name=kubecf pod'
     - name: Run Smoke Tests
       run: bazel run //testing:smoke_tests | tee diego-smoke.log
     - uses: actions/upload-artifact@v2
@@ -104,6 +101,7 @@ jobs:
       with:
         name: diego-smoke.log
         path: diego-smoke.log
+    - run: rm -f diego-smoke.log
     - name: Run CATS
       run: bazel run //testing:acceptance_tests | tee diego-cats.log
     - uses: actions/upload-artifact@v2
@@ -188,12 +186,9 @@ jobs:
       run: |
         bazel run //dev/kubecf:apply
     - name: Wait for KubeCF
-      run: |
-        kubectl get pods --namespace kubecf --watch &
-        WATCH_PID=$!
-        sleep 1200
-        kill $WATCH_PID
-        parallel --verbose --retries 40 --delay 15 ::: 'kubectl wait --for=condition=Ready -n kubecf --timeout=2400s --selector=quarks.cloudfoundry.org/deployment-name=kubecf pod'
+      run: >
+        parallel --verbose --retries 120 --delay 15 ::: 
+        'kubectl wait --for=condition=Ready -n kubecf --timeout=2400s --selector=quarks.cloudfoundry.org/deployment-name=kubecf pod'
     - name: Run Smoke Tests
       run: bazel run //testing:smoke_tests | tee eirini-smoke.log
     - uses: actions/upload-artifact@v2

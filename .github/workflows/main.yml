@@ -10,8 +10,6 @@ on:
   pull_request:
     branches: [ marky/minikube-actions ]
 env:
-  GKE_PROJECT: ${{ secrets.GKE_PROJECT }}
-  GKE_ZONE: europe-west1-c  # TODO: update to cluster zone
   RUN_ID: ${{github.run_id}}
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
@@ -44,15 +42,22 @@ jobs:
         kubectl create namespace cf-operator
         bazel run //dev/cf_operator:apply
     - name: Wait for cf-operator
-      run: |
-        parallel --verbose --retries 60 --delay 2 ::: 'kubectl wait --for=condition=Ready --timeout=600s -n cf-operator --selector=name=cf-operator pod'
-        parallel --verbose --retries 60 --delay 2 ::: 'kubectl wait --for=condition=Ready --timeout=600s -n cf-operator --selector=name=quarks-job pod'
+      timeout-minutes: 5
+      run: >
+        parallel --verbose --retries 60 --delay 2
+        kubectl wait --for=condition=Ready --timeout=600s
+        --namespace=cf-operator --selector=name={1} pod
+        ::: cf-operator quarks-job
     - name: Wait for CRDs
-      run: |
-        parallel --verbose --retries 60 --delay 2 ::: 'kubectl wait --for condition=established --timeout=600s crd/boshdeployments.quarks.cloudfoundry.org'
-        parallel --verbose --retries 60 --delay 2 ::: 'kubectl wait --for condition=established --timeout=600s crd/quarksjobs.quarks.cloudfoundry.org'
-        parallel --verbose --retries 60 --delay 2 ::: 'kubectl wait --for condition=established --timeout=600s crd/quarkssecrets.quarks.cloudfoundry.org'
-        parallel --verbose --retries 60 --delay 2 ::: 'kubectl wait --for condition=established --timeout=600s crd/quarksstatefulsets.quarks.cloudfoundry.org'
+      timeout-minutes: 5
+      run: >
+        parallel --verbose --retries 60 --delay 2
+        kubectl wait --for condition=established --timeout=600s
+        :::
+        crd/boshdeployments.quarks.cloudfoundry.org
+        crd/quarksjobs.quarks.cloudfoundry.org
+        crd/quarkssecrets.quarks.cloudfoundry.org
+        crd/quarksstatefulsets.quarks.cloudfoundry.org
     - name: Configure Domain
       run: |
         node_ip=$(bazel run @kubectl//:binary -- get nodes -o json | bazel run @jq//:binary -- -r '.items[].status.addresses[] | select(.type == "InternalIP").address')
@@ -91,9 +96,19 @@ jobs:
       run: |
         bazel run //dev/kubecf:apply
     - name: Wait for KubeCF
-      run: >
-        parallel --verbose --retries 120 --delay 15 ::: 
-        'kubectl wait --for=condition=Ready -n kubecf --timeout=2400s --selector=quarks.cloudfoundry.org/deployment-name=kubecf pod'
+      timeout-minutes: 30
+      run: |
+        echo Waiting for pods to exist...
+        while [[ $(                                                            \
+            kubectl get pod --namespace=kubecf                                 \
+            --selector=quarks.cloudfoundry.org/deployment-name=kubecf          \
+            --output=go-template='{{ .items | len }}'                          \
+          ) -lt 1 ]]
+        do sleep 10
+        done
+        echo Waiting for pods to be ready...
+        kubectl wait --for=condition=Ready --namespace=kubecf --timeout=-1s    \
+          --selector=quarks.cloudfoundry.org/deployment-name=kubecf pod
     - name: Run Smoke Tests
       run: bazel run //testing:smoke_tests | tee diego-smoke.log
     - uses: actions/upload-artifact@v2
@@ -116,6 +131,18 @@ jobs:
       with:
         name: diego-sits.log
         path: diego-sits.log
+    - name: Get deployment details
+      if: always()
+      run: |
+        kubectl describe pods --namespace=cf-operator >> post-deploy.log
+        kubectl get pods --namespace=cf-operator --output yaml >> post-deploy.log
+        kubectl describe pods --namespace=kubecf >> post-deploy.log
+        kubectl get pods --namespace=kubecf --output yaml >> post-deploy.log
+    - uses: actions/upload-artifact@v2
+      if: always()
+      with:
+        name: post-deploy.log
+        path: post-deploy.log
   eirini:
     runs-on: ubuntu-18.04
     steps:
@@ -144,15 +171,22 @@ jobs:
         kubectl create namespace cf-operator
         bazel run //dev/cf_operator:apply
     - name: Wait for cf-operator
-      run: |
-        parallel --verbose --retries 60 --delay 2 ::: 'kubectl wait --for=condition=Ready --timeout=600s -n cf-operator --selector=name=cf-operator pod'
-        parallel --verbose --retries 60 --delay 2 ::: 'kubectl wait --for=condition=Ready --timeout=600s -n cf-operator --selector=name=quarks-job pod'
+      timeout-minutes: 5
+      run: >
+        parallel --verbose --retries 60 --delay 2
+        kubectl wait --for=condition=Ready --timeout=600s
+        --namespace=cf-operator --selector=name={1} pod
+        ::: cf-operator quarks-job
     - name: Wait for CRDs
-      run: |
-        parallel --verbose --retries 60 --delay 2 ::: 'kubectl wait --for condition=established --timeout=600s crd/boshdeployments.quarks.cloudfoundry.org'
-        parallel --verbose --retries 60 --delay 2 ::: 'kubectl wait --for condition=established --timeout=600s crd/quarksjobs.quarks.cloudfoundry.org'
-        parallel --verbose --retries 60 --delay 2 ::: 'kubectl wait --for condition=established --timeout=600s crd/quarkssecrets.quarks.cloudfoundry.org'
-        parallel --verbose --retries 60 --delay 2 ::: 'kubectl wait --for condition=established --timeout=600s crd/quarksstatefulsets.quarks.cloudfoundry.org'
+      timeout-minutes: 5
+      run: >
+        parallel --verbose --retries 60 --delay 2
+        kubectl wait --for condition=established --timeout=600s
+        :::
+        crd/boshdeployments.quarks.cloudfoundry.org
+        crd/quarksjobs.quarks.cloudfoundry.org
+        crd/quarkssecrets.quarks.cloudfoundry.org
+        crd/quarksstatefulsets.quarks.cloudfoundry.org
     - name: Configure Domain
       run: |
         node_ip=$(bazel run @kubectl//:binary -- get nodes -o json | bazel run @jq//:binary -- -r '.items[].status.addresses[] | select(.type == "InternalIP").address')
@@ -186,9 +220,19 @@ jobs:
       run: |
         bazel run //dev/kubecf:apply
     - name: Wait for KubeCF
-      run: >
-        parallel --verbose --retries 120 --delay 15 ::: 
-        'kubectl wait --for=condition=Ready -n kubecf --timeout=2400s --selector=quarks.cloudfoundry.org/deployment-name=kubecf pod'
+      timeout-minutes: 30
+      run: |
+        echo Waiting for pods to exist...
+        while [[ $(                                                            \
+            kubectl get pod --namespace=kubecf                                 \
+            --selector=quarks.cloudfoundry.org/deployment-name=kubecf          \
+            --output=go-template='{{ .items | len }}'                          \
+          ) -lt 1 ]]
+        do sleep 10
+        done
+        echo Waiting for pods to be ready...
+        kubectl wait --for=condition=Ready --namespace=kubecf --timeout=-1s    \
+          --selector=quarks.cloudfoundry.org/deployment-name=kubecf pod
     - name: Run Smoke Tests
       run: bazel run //testing:smoke_tests | tee eirini-smoke.log
     - uses: actions/upload-artifact@v2
@@ -196,4 +240,15 @@ jobs:
       with:
         name: eirini-smoke.log
         path: eirini-smoke.log
-        
+    - name: Get deployment details
+      if: always()
+      run: |
+        kubectl describe pods --namespace=cf-operator >> post-deploy.log
+        kubectl get pods --namespace=cf-operator --output yaml >> post-deploy.log
+        kubectl describe pods --namespace=kubecf >> post-deploy.log
+        kubectl get pods --namespace=kubecf --output yaml >> post-deploy.log
+    - uses: actions/upload-artifact@v2
+      if: always()
+      with:
+        name: post-deploy.log
+        path: post-deploy.log

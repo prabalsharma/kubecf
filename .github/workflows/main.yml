@@ -6,9 +6,9 @@ name: CI
 # events but only for the master branch
 on:
   push:
-    branches: [ vladi-actions-test ]
+    branches: [ marky/minikube-actions ]
   pull_request:
-    branches: [ vladi-actions-test ]
+    branches: [ marky/minikube-actions ]
 env:
   GKE_PROJECT: ${{ secrets.GKE_PROJECT }}
   GKE_ZONE: europe-west1-c  # TODO: update to cluster zone

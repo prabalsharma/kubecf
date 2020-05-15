@@ -97,32 +97,27 @@ jobs:
         sleep 1200
         kill $WATCH_PID
         parallel --verbose --retries 40 --delay 15 ::: 'kubectl wait --for=condition=Ready -n kubecf --timeout=2400s --selector=quarks.cloudfoundry.org/deployment-name=kubecf pod'
-    - name: Setup a logging dir
-      run: |
-        mkdir -p "logs-diego-${RUN_ID}"
     - name: Run Smoke Tests
-      run: |
-        echo "Logs are found here: https://kubecf-ci-logs.s3.eu-central-1.amazonaws.com/index.html"
-        bazel run //testing:smoke_tests > "logs-diego-${RUN_ID}/smoke.log"
-    - name: Run CATS
-      run: |
-        echo "Logs are found here: https://kubecf-ci-logs.s3.eu-central-1.amazonaws.com/index.html"
-        bazel run //testing:acceptance_tests > "logs-diego-${RUN_ID}/cats.log"
-    - name: Run SITS
-      run: |
-        echo "Logs are found here: https://kubecf-ci-logs.s3.eu-central-1.amazonaws.com/index.html"
-        bazel run //testing:sync_integration_tests > "logs-diego-${RUN_ID}/sits.log"
-    - uses: jakejarvis/s3-sync-action@master
-      if: ${{ !always() }}
+      run: bazel run //testing:smoke_tests | tee diego-smoke.log
+    - uses: actions/upload-artifact@v2
+      if: always()
       with:
-        args: --acl public-read --follow-symlinks --delete
-      env:
-        AWS_S3_BUCKET: kubecf-ci-logs
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: 'eu-central-1'
-        SOURCE_DIR: ./logs-diego-${{github.run_id}}
-        DEST_DIR: logs-diego-${{github.run_id}}
+        name: diego-smoke.log
+        path: diego-smoke.log
+    - name: Run CATS
+      run: bazel run //testing:acceptance_tests | tee diego-cats.log
+    - uses: actions/upload-artifact@v2
+      if: always()
+      with:
+        name: diego-cats.log
+        path: diego-cats.log
+    - name: Run SITS
+      run: bazel run //testing:sync_integration_tests | tee diego-sits.log
+    - uses: actions/upload-artifact@v2
+      if: always()
+      with:
+        name: diego-sits.log
+        path: diego-sits.log
   eirini:
     runs-on: ubuntu-18.04
     steps:
@@ -199,22 +194,11 @@ jobs:
         sleep 1200
         kill $WATCH_PID
         parallel --verbose --retries 40 --delay 15 ::: 'kubectl wait --for=condition=Ready -n kubecf --timeout=2400s --selector=quarks.cloudfoundry.org/deployment-name=kubecf pod'
-    - name: Setup a logging dir
-      run: |
-        mkdir -p "logs-eirini-${RUN_ID}"
     - name: Run Smoke Tests
-      run: |
-        echo "Logs are found here: https://kubecf-ci-logs.s3.eu-central-1.amazonaws.com/index.html"
-        bazel run //testing:smoke_tests > "logs-eirini-${RUN_ID}/smoke.log"
-    - uses: jakejarvis/s3-sync-action@master
-      if: ${{ !always() }}
+      run: bazel run //testing:smoke_tests | tee eirini-smoke.log
+    - uses: actions/upload-artifact@v2
+      if: always()
       with:
-        args: --acl public-read --follow-symlinks --delete
-      env:
-        AWS_S3_BUCKET: kubecf-ci-logs
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_REGION: 'eu-central-1'
-        SOURCE_DIR: ./logs-eirini-${{github.run_id}}
-        DEST_DIR: logs-eirini-${{github.run_id}}
+        name: eirini-smoke.log
+        path: eirini-smoke.log
         

@@ -19,9 +19,15 @@ jobs:
     steps:
     - uses: actions/checkout@master
     - uses: helm/kind-action@v1.0.0-rc.1
+      id: cluster-setup
       with:
         version: v0.8.1
         cluster_name: kubecf-kind
+    - name: pre-load image
+      run: >
+        docker exec --privileged -i kubecf-kind-control-plane
+        ctr --namespace=k8s.io images pull
+        docker.io/cfcontainerization/cf-acceptance-tests:SLE_15_SP1-23.21-7.0.0_374.gb8e8e6af-0.0.13
     - uses: actions/setup-ruby@v1
       with:
         ruby-version: '2.6'
@@ -96,10 +102,12 @@ jobs:
       run: |
         bazel run //dev/kubecf:apply
     - name: Wait for KubeCF
-      timeout-minutes: 30
+      id: wait-kubecf
+      timeout-minutes: 45
       run: |
         echo Waiting for pods to exist...
-        while [[ $(                                                            \
+        set -o xtrace
+        while [[ $(                                                \
             kubectl get pod --namespace=kubecf                                 \
             --selector=quarks.cloudfoundry.org/deployment-name=kubecf          \
             --output=go-template='{{ .items | len }}'                          \
@@ -109,37 +117,43 @@ jobs:
         echo Waiting for pods to be ready...
         kubectl wait --for=condition=Ready --namespace=kubecf --timeout=-1s    \
           --selector=quarks.cloudfoundry.org/deployment-name=kubecf pod
+    - run: kubectl get pod --namespace=kubecf --output=wide
+      if: always() && steps.wait-kubecf.outcome == 'failure'
     - name: Run Smoke Tests
+      id: smoke
       run: bazel run //testing:smoke_tests | tee diego-smoke.log
     - uses: actions/upload-artifact@v2
-      if: always()
+      if: always() && steps.smoke.outcome != 'skipped'
       with:
         name: diego-smoke.log
         path: diego-smoke.log
     - run: rm -f diego-smoke.log
     - name: Run CATS
+      id: cats
       run: bazel run //testing:acceptance_tests | tee diego-cats.log
     - uses: actions/upload-artifact@v2
-      if: always()
+      if: always() && steps.cats.outcome != 'skipped'
       with:
         name: diego-cats.log
         path: diego-cats.log
     - name: Run SITS
+      id: steps
       run: bazel run //testing:sync_integration_tests | tee diego-sits.log
     - uses: actions/upload-artifact@v2
-      if: always()
+      if: always() && steps.sits.outcome != 'skipped'
       with:
         name: diego-sits.log
         path: diego-sits.log
     - name: Get deployment details
-      if: always()
+      if: always() && steps.cluster-setup.outcome == 'success'
       run: |
+        set +o errexit
         kubectl describe pods --namespace=cf-operator >> diego-post-deploy.log
         kubectl get pods --namespace=cf-operator --output yaml >> diego-post-deploy.log
         kubectl describe pods --namespace=kubecf >> diego-post-deploy.log
         kubectl get pods --namespace=kubecf --output yaml >> diego-post-deploy.log
     - uses: actions/upload-artifact@v2
-      if: always()
+      if: always() && steps.cluster-setup.outcome == 'success'
       with:
         name: diego-post-deploy.log
         path: diego-post-deploy.log
@@ -148,6 +162,7 @@ jobs:
     steps:
     - uses: actions/checkout@master
     - uses: helm/kind-action@v1.0.0-rc.1
+      id: cluster-setup
       with:
         version: v0.8.1
         cluster_name: kubecf-kind
@@ -234,21 +249,23 @@ jobs:
         kubectl wait --for=condition=Ready --namespace=kubecf --timeout=-1s    \
           --selector=quarks.cloudfoundry.org/deployment-name=kubecf pod
     - name: Run Smoke Tests
+      id: smoke
       run: bazel run //testing:smoke_tests | tee eirini-smoke.log
     - uses: actions/upload-artifact@v2
-      if: always()
+      if: always() && steps.smoke.outcome != 'skipped'
       with:
         name: eirini-smoke.log
         path: eirini-smoke.log
     - name: Get deployment details
-      if: always()
+      if: always() && steps.cluster-setup.outcome == 'success'
       run: |
+        set +o errexit
         kubectl describe pods --namespace=cf-operator >> eirini-post-deploy.log
         kubectl get pods --namespace=cf-operator --output yaml >> eirini-post-deploy.log
         kubectl describe pods --namespace=kubecf >> eirini-post-deploy.log
         kubectl get pods --namespace=kubecf --output yaml >> eirini-post-deploy.log
     - uses: actions/upload-artifact@v2
-      if: always()
+      if: always() && steps.cluster-setup.outcome == 'success'
       with:
         name: eirini-post-deploy.log
         path: eirini-post-deploy.log

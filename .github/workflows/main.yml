@@ -134,15 +134,15 @@ jobs:
     - name: Get deployment details
       if: always()
       run: |
-        kubectl describe pods --namespace=cf-operator >> post-deploy.log
-        kubectl get pods --namespace=cf-operator --output yaml >> post-deploy.log
-        kubectl describe pods --namespace=kubecf >> post-deploy.log
-        kubectl get pods --namespace=kubecf --output yaml >> post-deploy.log
+        kubectl describe pods --namespace=cf-operator >> diego-post-deploy.log
+        kubectl get pods --namespace=cf-operator --output yaml >> diego-post-deploy.log
+        kubectl describe pods --namespace=kubecf >> diego-post-deploy.log
+        kubectl get pods --namespace=kubecf --output yaml >> diego-post-deploy.log
     - uses: actions/upload-artifact@v2
       if: always()
       with:
-        name: post-deploy.log
-        path: post-deploy.log
+        name: diego-post-deploy.log
+        path: diego-post-deploy.log
   eirini:
     runs-on: ubuntu-18.04
     steps:
@@ -243,12 +243,12 @@ jobs:
     - name: Get deployment details
       if: always()
       run: |
-        kubectl describe pods --namespace=cf-operator >> post-deploy.log
-        kubectl get pods --namespace=cf-operator --output yaml >> post-deploy.log
-        kubectl describe pods --namespace=kubecf >> post-deploy.log
-        kubectl get pods --namespace=kubecf --output yaml >> post-deploy.log
+        kubectl describe pods --namespace=cf-operator >> eirini-post-deploy.log
+        kubectl get pods --namespace=cf-operator --output yaml >> eirini-post-deploy.log
+        kubectl describe pods --namespace=kubecf >> eirini-post-deploy.log
+        kubectl get pods --namespace=kubecf --output yaml >> eirini-post-deploy.log
     - uses: actions/upload-artifact@v2
       if: always()
       with:
-        name: post-deploy.log
-        path: post-deploy.log
+        name: eirini-post-deploy.log
+        path: eirini-post-deploy.log

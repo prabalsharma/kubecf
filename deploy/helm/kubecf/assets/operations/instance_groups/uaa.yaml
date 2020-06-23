@@ -104,3 +104,8 @@
 {{- range $bytes := .Files.Glob "assets/operations/pre_render_scripts/uaa_*" }}
 {{ $bytes | toString }}
 {{- end }}
+
+{{- if .Values.features.uaa.native }}
+- type: remove
+  path: /instance_groups/name=uaa
+{{- end }}

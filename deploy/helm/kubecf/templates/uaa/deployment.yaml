@@ -1,0 +1,281 @@
+{{- if .Values.features.uaa.native }}
+
+{{- $uaa_image := "" }}
+{{- with .Values.features.uaa }}
+  {{- if hasPrefix "@" .image_tag }}
+    {{- $uaa_image = printf "%s%s" .image .image_tag }}
+  {{- else }}
+    {{- $uaa_image = printf "%s:%s" .image .image_tag }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: {{ .Release.Namespace | quote }}
+  name: uaa
+spec:
+  selector:
+    matchLabels:
+      app: uaa
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: uaa
+    spec:
+      serviceAccountName: uaa
+      initContainers:
+      - name: generate-config
+        {{- with .Values.features.uaa }}
+        image: {{ .init_image }}:{{ .init_image_tag }}
+        {{- end }}
+        {{- $dburl := printf "mysql://database.%s" .Release.Namespace }}
+        {{- if .Values.features.embedded_database.enabled | not }}
+        {{- with .Values.features.external_database }}
+        {{- $dburl = printf "%s://%s:%s" .type .host .port }}
+        {{- end }}
+        {{- end }}
+        command:
+        - /usr/bin/ruby
+        - -e
+        - |
+          require 'json'
+          require 'yaml'
+          config = {
+            issuer: {
+              uri: 'http://localhost:8080/uaa',
+            },
+            encryption: {
+              active_key_label: 'CHANGE-THIS-KEY',
+              encryption_keys: [{
+                label: 'CHANGE-THIS-KEY',
+                passphrase: 'CHANGEME',
+              }]
+            },
+            login: {
+              serviceProviderKey: 'TODO',
+              serviceProviderKeyPassword: 'password',
+              serviceProviderCertificate: '',
+            },
+            LOGIN_SECRET: 'loginsecret',
+            database: {
+              maxactive: 100,
+              maxidle: 10,
+              minidle: 0,
+              removeabandoned: false,
+              logabandoned: true,
+              abandonedtimeout: 300,
+              url: '{{ $dburl }}'
+            }
+          }
+          Dir.chdir('/etc/config') do
+            open('uaa.yml', 'w') { |f| f.puts config.to_json }
+          end
+        volumeMounts:
+        - name: uaa-config
+          mountPath: /etc/config
+      - name: generate-log-config
+        image: {{ $uaa_image }}
+        command:
+        - sh
+        - -c
+        - |
+          cat > /etc/config/log4j2.properties <<"EOF"
+          status = error
+          dest = err
+          name = UaaLog
+
+          property.log_pattern=[%d{yyyy-MM-dd HH:mm:ss.SSS}] uaa%X{context} - %pid [%t] .... %5p --- %c{1}: %replace{%m}{(?<=password=|client_secret=)([^&]*)}{<redacted>}%n
+
+          appender.uaaDefaultAppender.type = Console
+          appender.uaaDefaultAppender.name = UaaDefaultAppender
+          appender.uaaDefaultAppender.layout.type = PatternLayout
+          appender.uaaDefaultAppender.layout.pattern = [UAA] ${log_pattern}
+
+          appender.uaaAuditAppender.type = Console
+          appender.uaaAuditAppender.name = UaaAuditAppender
+          appender.uaaAuditAppender.layout.type = PatternLayout
+          appender.uaaAuditAppender.layout.pattern = [UAA_AUDIT] ${log_pattern}
+
+          rootLogger.level = info
+          rootLogger.appenderRef.uaaDefaultAppender.ref = UaaDefaultAppender
+
+          logger.UAAAudit.name = UAA.Audit
+          logger.UAAAudit.level = info
+          logger.UAAAudit.additivity = true
+          logger.UAAAudit.appenderRef.auditEventLog.ref = UaaAuditAppender
+
+          logger.cfIdentity.name = org.cloudfoundry.identity
+          logger.cfIdentity.level = info
+          logger.cfIdentity.additivity = false
+          logger.cfIdentity.appenderRef.uaaDefaultAppender.ref = UaaDefaultAppender          
+          EOF
+        volumeMounts:
+        - name: uaa-config
+          mountPath: /etc/config
+      - name: build-uaa-truststore
+        image: {{ $uaa_image }}
+        command:
+        - 'sh'
+        - '-c'
+        - |
+          find_keytool_or_fail_fast() {
+            local has_keytool
+            ls "${JAVA_HOME}"/bin/keytool
+            has_keytool=$?
+            if [ ${has_keytool} -ne 0 ]; then
+              exit ${has_keytool}
+            fi
+          }
+          import_cert() {
+            local pemfile="${1}"
+            local alias="${2}"
+            echo "Adding ${pemfile} to truststore"
+            # Have to use cat instead of -file
+            # because keytool won't understand all of the filenames!
+            cat "${pemfile}" | "${JAVA_HOME}"/bin/keytool \
+              -noprompt \
+              -import \
+              -trustcacerts \
+              -alias "${alias}" \
+              -keystore "${TRUSTSTORE_FILE}" \
+              -storepass "${TRUSTSTORE_PASSWORD}"
+          }
+          get_alias() {
+            local pemfile="${1}"
+            basename "${pemfile}" .pem
+          }
+          add_ca_certs() {
+            local has_ca_certs
+            ls ${SECRETS_DIR}/ca_certs/*.pem
+            has_ca_certs=$?
+            if [ ${has_ca_certs} -eq 0 ]; then
+              for cert in ${SECRETS_DIR}/ca_certs/*.pem; do
+                import_cert "${cert}" "$(get_alias $cert)"
+              done
+            fi
+          }
+          add_system_certs() {
+            for cert in $OS_CERTS_DIR/*.pem; do
+              import_cert "${cert}" "$(get_alias $cert)"
+            done
+          }
+          main() {
+            find_keytool_or_fail_fast
+            add_ca_certs
+            add_system_certs
+          }
+          main
+        env:
+        - name: SECRETS_DIR
+          value: /var/run/secrets
+        - name: TRUSTSTORE_FILE
+          value: /etc/truststore/uaa.pkcs12.truststore
+        - name: TRUSTSTORE_PASSWORD
+          value: changeit # XXX CHANGE ME
+        - name: JAVA_HOME
+          value: /layers/paketo-buildpacks_bellsoft-liberica/jre
+        - name: OS_CERTS_DIR
+          value: /etc/ssl/certs
+        volumeMounts:
+        #- name: ca-certs-files
+        #  mountPath: /var/run/secrets/ca_certs
+        #  readOnly: true
+        - name: secrets
+          mountPath: /var/run/secrets
+          readOnly: true
+        - name: truststore-file
+          mountPath: /etc/truststore
+      containers:
+      - name: uaa
+        image: {{ $uaa_image }}
+        resources:
+          requests:
+            memory: {{ .Values.sizing.uaa.resources.requests.memory }}
+            cpu: {{ .Values.sizing.uaa.resources.requests.cpu }}
+        ports:
+        - name: http-uaa
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: BPL_TOMCAT_ACCESS_LOGGING
+          value: "y" # XXX change me
+        - name: CATALINA_OUT
+          value: /proc/self/fd/1
+        - name: JAVA_OPTS
+          # XXX change trust store password
+          value: >-
+            -Djava.security.egd=file:/dev/urandom
+            -Dlogging.config=/etc/config/log4j2.properties
+            -Dlog4j.configurationFile=/etc/config/log4j2.properties
+            -DCLOUDFOUNDRY_CONFIG_PATH=/etc/config
+            -DSECRETS_DIR=/etc/secrets
+            -Djavax.net.ssl.trustStore=/etc/truststore/uaa.pkcs12.truststore
+            -Djavax.net.ssl.trustStoreType=PKCS12
+            -Djavax.net.ssl.trustStorePassword=changeit
+            -Dstatsd.enabled=true
+        volumeMounts:
+        - name: uaa-config
+          mountPath: /etc/config
+        #- name: smtp-credentials-file
+        #  mountPath: /var/run/secrets/smtp_credentials.yml
+        #  subPath: smtp_credentials.yml
+        #  readOnly: true
+        #- name: database-credentials-file
+        #  mountPath: /var/run/secrets/database_credentials.yml
+        #  subPath: database_credentials.yml
+        #  readOnly: true
+        #- name: admin-client-credentials-file
+        #  mountPath: /var/run/secrets/admin_client_credentials.yml
+        #  subPath: admin_client_credentials.yml
+        #  readOnly: true
+        #- name: jwt-policy-signing-keys-file
+        #  mountPath: /var/run/secrets/jwt_policy_signing_keys.yml
+        #  subPath: jwt_policy_signing_keys.yml
+        #  readOnly: true
+        - name: truststore-file
+          mountPath: /etc/truststore
+          readOnly: true
+        - name: secrets
+          mountPath: /var/run/secrets
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http-uaa
+          failureThreshold: 25
+          initialDelaySeconds: 60
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http-uaa
+      volumes:
+      #- name: uaa-config
+      #  configMap:
+      #    name: uaa-config
+      #- name: smtp-credentials-file
+      #  secret:
+      #    optional: true
+      #    secretName: uaa-smtp-credentials
+      #- name: database-credentials-file
+      #  secret:
+      #    optional: true
+      #    secretName: uaa-database-credentials
+      #- name: admin-client-credentials-file
+      #  secret:
+      #    secretName: uaa-admin-client-credentials
+      #- name: jwt-policy-signing-keys-file
+      #  secret:
+      #    secretName: var-uaa-jwt-signing-key
+      #- name: ca-certs-files
+      #  secret:
+      #    optional: true
+      #    secretName: uaa-ca-certs
+      - name: uaa-config
+        emptyDir: {}
+      - name: secrets
+        emptyDir: {}
+      - name: truststore-file
+        emptyDir: {}
+{{- end }}

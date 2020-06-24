@@ -8,6 +8,30 @@
     {{- $uaa_image = printf "%s:%s" .image .image_tag }}
   {{- end }}
 {{- end }}
+
+{{- $secrets := list }}
+{{- $secrets = append $secrets "var-credhub-admin-client-secret" }}
+{{- $secrets = append $secrets "var-credhub-setup-client-secret" }}
+{{- $secrets = append $secrets "var-uaa-ca" }}
+{{- $secrets = append $secrets "var-uaa-clients-cc-routing-secret" }}
+{{- $secrets = append $secrets "var-uaa-clients-cc-service-dashboards-secret" }}
+{{- $secrets = append $secrets "var-uaa-clients-cc-service-key-client-secret" }}
+{{- $secrets = append $secrets "var-uaa-clients-cf-smoke-tests-secret" }}
+{{- $secrets = append $secrets "var-uaa-clients-cloud-controller-username-lookup-secret" }}
+{{- $secrets = append $secrets "var-uaa-clients-doppler-secret" }}
+{{- $secrets = append $secrets "var-uaa-clients-gorouter-secret" }}
+{{- $secrets = append $secrets "var-uaa-clients-network-policy-secret" }}
+{{- $secrets = append $secrets "var-uaa-clients-routing-api-client-secret" }}
+{{- $secrets = append $secrets "var-uaa-clients-ssh-proxy-secret" }}
+{{- $secrets = append $secrets "var-uaa-clients-tcp-emitter-secret" }}
+{{- $secrets = append $secrets "var-uaa-clients-tcp-router-secret" }}
+{{- $secrets = append $secrets "var-uaa-database-password" }}
+{{- $secrets = append $secrets "var-uaa-default-encryption-passphrase" }}
+{{- $secrets = append $secrets "var-uaa-setup-client-secret" }}
+{{- $secrets = append $secrets "var-uaa-login-saml" }}
+{{- $secrets = append $secrets "var-uaa-admin-client-secret" }}
+{{- $secrets = append $secrets "with-ops" }}
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -23,6 +47,8 @@ spec:
     metadata:
       labels:
         app: uaa
+      annotations:
+        quarks.cloudfoundry.org/wait-for: '[ "database" ]'
     spec:
       serviceAccountName: uaa
       initContainers:
@@ -30,10 +56,12 @@ spec:
         {{- with .Values.features.uaa }}
         image: {{ .init_image }}:{{ .init_image_tag }}
         {{- end }}
-        {{- $dburl := printf "mysql://database.%s" .Release.Namespace }}
+        {{- $dburl := printf "jdbc:mysql://database.%s.svc:3306/uaa" .Release.Namespace }}
+        {{- $db_adapter := "mysql "}}
         {{- if .Values.features.embedded_database.enabled | not }}
         {{- with .Values.features.external_database }}
-        {{- $dburl = printf "%s://%s:%s" .type .host .port }}
+        {{- $dburl = printf "jdbc:%s://%s:%s" .type .host .port }}
+        {{- $db_adapter = .type }}
         {{- end }}
         {{- end }}
         command:
@@ -42,39 +70,76 @@ spec:
         - |
           require 'json'
           require 'yaml'
+
+          def secret(path)
+            File.read("/run/secrets/#{path}").chomp
+          end
+
+          manifest = YAML.load secret('with-ops/manifest.yaml')
+          ig = manifest['instance_groups'].find { |g| g['name'] == 'uaa' }
+          job = ig['jobs'].find { |j| j['name'] == 'uaa' }
+          puts job.to_yaml
+
+          # Replace the OAuth client secrets because we don't get template-render
+          job['properties']['uaa']['clients'].each_value do |config|
+            /^\(\((?<secret_name>[^\)]+)\)\)$/ =~ config['secret']
+            next if secret_name.nil?
+            secret_name.gsub! /_/, '-'
+            config['secret'] = secret("var-#{secret_name}/password")
+          end
+
           config = {
-            issuer: {
-              uri: 'http://localhost:8080/uaa',
+            admin: {
+              client_secret: secret('var-uaa-admin-client-secret/password'),
+            },
+            ca_certs: [ secret('var-uaa-ca/certificate') ],
+            database: {
+              url: '{{ $dburl }}',
+              username: 'uaa',
+              password: secret('var-uaa-database-password/password'),
             },
             encryption: {
-              active_key_label: 'CHANGE-THIS-KEY',
+              active_key_label: 'default_key',
               encryption_keys: [{
-                label: 'CHANGE-THIS-KEY',
-                passphrase: 'CHANGEME',
+                label: 'default_key',
+                passphrase: secret('var-uaa-default-encryption-passphrase/password'),
               }]
             },
-            login: {
-              serviceProviderKey: 'TODO',
-              serviceProviderKeyPassword: 'password',
-              serviceProviderCertificate: '',
+            issuer: {
+              uri: 'https://uaa.{{ .Values.system_domain }}',
             },
-            LOGIN_SECRET: 'loginsecret',
-            database: {
-              maxactive: 100,
-              maxidle: 10,
-              minidle: 0,
-              removeabandoned: false,
-              logabandoned: true,
-              abandonedtimeout: 300,
-              url: '{{ $dburl }}'
-            }
+            login: {
+              saml: {
+                activeKeyId: 'key-1',
+                keys: {
+                  'key-1': {
+                    certificate: secret('var-uaa-login-saml/certificate'),
+                    key: secret('var-uaa-login-saml/private_key'),
+                    passphrase: '',
+                  }
+                }
+              }
+            },
+            oauth: {
+              clients: job['properties']['uaa']['clients']
+            },
+            spring_profiles: "default,{{ $db_adapter }}",
           }
+
+          # Round trip through JSON to convert symbol to string
+          config = JSON.load config.to_json
+          puts "config loaded: \n#{config.to_yaml}"
+
           Dir.chdir('/etc/config') do
             open('uaa.yml', 'w') { |f| f.puts config.to_json }
           end
         volumeMounts:
         - name: uaa-config
           mountPath: /etc/config
+        {{- range $secrets }}
+        - name: {{ . }}
+          mountPath: /run/secrets/{{ . }}
+        {{- end }}
       - name: generate-log-config
         image: {{ $uaa_image }}
         command:
@@ -278,4 +343,9 @@ spec:
         emptyDir: {}
       - name: truststore-file
         emptyDir: {}
+      {{- range $secrets }}
+      - name: {{ . }}
+        secret:
+          secretName: {{ . }}
+      {{- end }}
 {{- end }}

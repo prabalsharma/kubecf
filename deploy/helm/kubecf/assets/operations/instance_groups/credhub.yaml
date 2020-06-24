@@ -57,7 +57,7 @@
               name: var-cc-tls
               key: ca
         - name: UAA_URL
-          value: https://uaa.service.cf.internal:8443
+          value: https://uaa.service.cf.internal
         - name: UAA_CA_CERT
           valueFrom:
             secretKeyRef:

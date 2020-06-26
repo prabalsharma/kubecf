@@ -58,7 +58,7 @@
               name: var-cc-tls
               key: ca
         - name: UAA_URL
-          value: https://uaa.service.cf.internal
+          value: https://uaa.service.cf.internal:8443
         - name: UAA_CA_CERT
           valueFrom:
             secretKeyRef:
@@ -109,8 +109,4 @@
 - type: replace
   path: /instance_groups/name=uaa/lifecycle?
   value: disabled
-
-- type: replace
-  path: /addons/name=bosh-dns-aliases/jobs/name=bosh-dns-aliases/properties/aliases/domain=uaa.service.cf.internal/targets/instance_group=uaa/instance_group
-  value: ingress
 {{- end }}

@@ -3,7 +3,7 @@
 apiVersion: "extensions/v1beta1"
 kind: "Ingress"
 metadata:
-  name: {{ printf "%s-uaa" .Release.Name | quote }}
+  name: uaa
   namespace: {{ .Release.Namespace | quote }}
   annotations:
     # Inject some annotations if they don't exist in the annotations provided during deployment.
@@ -27,16 +27,19 @@ metadata:
     {{- $labels = printf "%s-%s" .Chart.Name (.Chart.Version | replace "+" "_") | dict "helm.sh/chart" | merge $labels }}
     {{- toYaml .Values.features.ingress.labels | indent 4 }}
 spec:
+  {{- $hostnames := list }}
+  {{- range list "uaa" "*.uaa" "login" "*.login" }}
+    {{- $hostnames = printf "%s.%s" . $.Values.system_domain | append $hostnames }}
+  {{- end }}
   tls:
-  - secretName: {{ .Release.Name }}-uaa-ingress-tls
+  - secretName: {{ .Release.Name }}-ingress-tls
     hosts:
-    - {{ printf "uaa.%s" .Values.system_domain | quote}}
-    - {{ printf "*.uaa.%s" .Values.system_domain | quote}}
-    - {{ printf "login.%s" .Values.system_domain | quote}}
-    - {{ printf "*.login.%s" .Values.system_domain | quote}}
+    {{- range $hostnames }}
+    - {{ . | quote }}
+    {{- end }}
   rules:
-  {{- range $prefix := list "uaa" "*.uaa" "login" "*.login" }}
-  - host: {{ printf "%s.%s" $prefix $.Values.system_domain | quote }}
+  {{- range $hostnames }}
+  - host: {{ . | quote }}
     http:
       paths:
       - path: "/"
@@ -44,6 +47,7 @@ spec:
           serviceName: uaa
           servicePort: 8080
   {{- end }}
+
 {{- else }}
 {{- fail "ingress is required for now" }}
 {{- end }}

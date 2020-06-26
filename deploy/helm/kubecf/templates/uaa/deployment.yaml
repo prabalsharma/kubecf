@@ -13,6 +13,7 @@
 {{- $secrets = append $secrets "var-credhub-admin-client-secret" }}
 {{- $secrets = append $secrets "var-credhub-setup-client-secret" }}
 {{- $secrets = append $secrets "var-uaa-ca" }}
+{{- $secrets = append $secrets "var-uaa-ssl" }}
 {{- $secrets = append $secrets "var-uaa-clients-cc-routing-secret" }}
 {{- $secrets = append $secrets "var-uaa-clients-cc-service-dashboards-secret" }}
 {{- $secrets = append $secrets "var-uaa-clients-cc-service-key-client-secret" }}
@@ -30,6 +31,7 @@
 {{- $secrets = append $secrets "var-uaa-setup-client-secret" }}
 {{- $secrets = append $secrets "var-uaa-login-saml" }}
 {{- $secrets = append $secrets "var-uaa-admin-client-secret" }}
+{{- $secrets = append $secrets "var-uaa-jwt-signing-key" }}
 {{- $secrets = append $secrets "with-ops" }}
 
 ---
@@ -52,12 +54,40 @@ spec:
     spec:
       serviceAccountName: uaa
       initContainers:
+      - name: generate-nginx-config
+        {{- with .Values.features.uaa }}
+        image: {{ .init_image }}:{{ .init_image_tag }}
+        {{- end }}
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -o errexit -o nounset -o xtrace -o pipefail
+          cp /run/secrets/uaa-ssl/* /run/nginx-config/
+          cat > /run/nginx-config/nginx.conf <<"EOF"
+            events {}
+            stream {
+              server {
+                listen 8443 ssl;
+
+                ssl_certificate     /etc/nginx/certificate;
+                ssl_certificate_key /etc/nginx/private_key;
+
+                proxy_pass localhost:8080;
+              }
+            }
+          EOF
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /run/nginx-config
+        - name: var-uaa-ssl
+          mountPath: /run/secrets/uaa-ssl
       - name: generate-config
         {{- with .Values.features.uaa }}
         image: {{ .init_image }}:{{ .init_image_tag }}
         {{- end }}
         {{- $dburl := printf "jdbc:mysql://database.%s.svc:3306/uaa" .Release.Namespace }}
-        {{- $db_adapter := "mysql "}}
+        {{- $db_adapter := "mysql" }}
         {{- if .Values.features.embedded_database.enabled | not }}
         {{- with .Values.features.external_database }}
         {{- $dburl = printf "jdbc:%s://%s:%s" .type .host .port }}
@@ -107,6 +137,18 @@ spec:
             },
             issuer: {
               uri: 'https://uaa.{{ .Values.system_domain }}',
+            },
+            jwt: {
+              token: {
+                policy: {
+                  activeKeyId: 'key-1',
+                  keys: {
+                    'key-1': {
+                      signingKey: secret('var-uaa-jwt-signing-key/private_key'),
+                    },
+                  },
+                },
+              },
             },
             login: {
               saml: {
@@ -174,7 +216,7 @@ spec:
           logger.cfIdentity.name = org.cloudfoundry.identity
           logger.cfIdentity.level = info
           logger.cfIdentity.additivity = false
-          logger.cfIdentity.appenderRef.uaaDefaultAppender.ref = UaaDefaultAppender          
+          logger.cfIdentity.appenderRef.uaaDefaultAppender.ref = UaaDefaultAppender
           EOF
         volumeMounts:
         - name: uaa-config
@@ -315,6 +357,16 @@ spec:
           httpGet:
             path: /healthz
             port: http-uaa
+      - name: ssl-endpoint
+        image: nginx:stable
+        ports:
+        - name: ssl-uaa
+          containerPort: 8443
+          protocol: TCP
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx
+          readOnly: true
       volumes:
       #- name: uaa-config
       #  configMap:
@@ -337,6 +389,8 @@ spec:
       #  secret:
       #    optional: true
       #    secretName: uaa-ca-certs
+      - name: nginx-config
+        emptyDir: {}
       - name: uaa-config
         emptyDir: {}
       - name: secrets

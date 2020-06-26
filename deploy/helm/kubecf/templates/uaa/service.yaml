@@ -7,46 +7,14 @@ metadata:
 spec:
   clusterIP: None
   ports:
-  - name: uaa
+  - name: http-uaa
     port: 8080
     protocol: TCP
     targetPort: http-uaa
+  - name: ssl-uaa
+    port: 8443
+    protocol: TCP
+    targetPort: ssl-uaa
   selector:
     app: uaa
-  type: ClusterIP
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ingress
-  namespace: {{ .Release.Namespace }}
-spec:
-  type: ExternalName
-  externalName: ingress.kube-system.svc
-  ports:
-  - name: http
-    port: 80
-    protocol: TCP
-  - name: https
-    port: 443
-    protocol: TCP
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ingress
-  namespace: kube-system
-spec:
-  clusterIP: None
-  ports:
-  - name: http
-    port: 80
-    protocol: TCP
-  - name: https
-    port: 443
-    protocol: TCP
-  selector:
-    app.kubernetes.io/name: nginx-ingress-controller
   type: ClusterIP

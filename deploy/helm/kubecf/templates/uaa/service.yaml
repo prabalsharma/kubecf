@@ -1,3 +1,4 @@
+{{- if .Values.features.uaa.native }}
 ---
 apiVersion: v1
 kind: Service
@@ -18,3 +19,4 @@ spec:
   selector:
     app: uaa
   type: ClusterIP
+{{- end }}

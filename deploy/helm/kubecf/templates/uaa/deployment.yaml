@@ -10,10 +10,11 @@
 {{- end }}
 
 {{- $secrets := list }}
+{{- $secrets = append $secrets "var-cf-admin-password" }}
 {{- $secrets = append $secrets "var-credhub-admin-client-secret" }}
 {{- $secrets = append $secrets "var-credhub-setup-client-secret" }}
+{{- $secrets = append $secrets "var-uaa-admin-client-secret" }}
 {{- $secrets = append $secrets "var-uaa-ca" }}
-{{- $secrets = append $secrets "var-uaa-ssl" }}
 {{- $secrets = append $secrets "var-uaa-clients-cc-routing-secret" }}
 {{- $secrets = append $secrets "var-uaa-clients-cc-service-dashboards-secret" }}
 {{- $secrets = append $secrets "var-uaa-clients-cc-service-key-client-secret" }}
@@ -28,11 +29,14 @@
 {{- $secrets = append $secrets "var-uaa-clients-tcp-router-secret" }}
 {{- $secrets = append $secrets "var-uaa-database-password" }}
 {{- $secrets = append $secrets "var-uaa-default-encryption-passphrase" }}
-{{- $secrets = append $secrets "var-uaa-setup-client-secret" }}
-{{- $secrets = append $secrets "var-uaa-login-saml" }}
-{{- $secrets = append $secrets "var-uaa-admin-client-secret" }}
 {{- $secrets = append $secrets "var-uaa-jwt-signing-key" }}
+{{- $secrets = append $secrets "var-uaa-login-saml" }}
+{{- $secrets = append $secrets "var-uaa-setup-client-secret" }}
+{{- $secrets = append $secrets "var-uaa-ssl" }}
 {{- $secrets = append $secrets "with-ops" }}
+{{- if not .Values.features.ingress.enabled }}
+{{- $secrets = append $secrets "var-nats-password" }}
+{{- end }}
 
 ---
 apiVersion: apps/v1
@@ -82,7 +86,7 @@ spec:
           mountPath: /run/nginx-config
         - name: var-uaa-ssl
           mountPath: /run/secrets/uaa-ssl
-      - name: generate-config
+      - name: generate-uaa-config
         {{- with .Values.features.uaa }}
         image: {{ .init_image }}:{{ .init_image_tag }}
         {{- end }}
@@ -165,8 +169,38 @@ spec:
             oauth: {
               clients: job['properties']['uaa']['clients']
             },
+            scim: {
+              userids_enabled: true,
+              user: { override: true },
+              users: []
+            },
             spring_profiles: "default,{{ $db_adapter }}",
           }
+
+          config[:scim][:users] = [{
+            name: 'admin',
+            password: secret('var-cf-admin-password/password'),
+            firstName: '',
+            lastName: '',
+            email: 'admin',
+            origin: 'uaa',
+            groups: %w(
+              clients.read
+              cloud_controller.admin
+              doppler.firehose
+              network.admin
+              openid
+              routing.router_groups.read
+              routing.router_groups.write
+              scim.read
+              scim.write
+            )
+          }].map do |user|
+            user[:groups] = user[:groups].join(',') if user[:groups].is_a? Array
+            %w(name password email firstName lastName groups origin).map do |key|
+              user[key.to_sym]
+            end.join('|')
+          end
 
           # Round trip through JSON to convert symbol to string
           config = JSON.load config.to_json
@@ -182,6 +216,70 @@ spec:
         - name: {{ . }}
           mountPath: /run/secrets/{{ . }}
         {{- end }}
+      {{- if not .Values.features.ingress.enabled }}
+      - name: generate-route-registrar-config
+        {{- with .Values.features.uaa }}
+        image: {{ .init_image }}:{{ .init_image_tag }}
+        {{- end }}
+        command:
+        - /usr/bin/ruby
+        - -e
+        - |
+          require 'json'
+
+          def secret(path)
+            File.read("/run/secrets/#{path}").chomp
+          end
+
+          config = {
+            message_bus_servers: [{
+              host: 'nats:4222',
+              user: 'nats',
+              password: secret('var-nats-password/password'),
+            }],
+            # XXX FIXME: We should have a per-replica endpoint here
+            host: 'uaa.service.cf.internal',
+            routes: [{
+              health_check: {
+                name: 'uaa-healthcheck',
+                # XXX FIXME: do a proper check on http://:8080/healthz == 'ok'
+                script_path: '/bin/true',
+              },
+              name: 'uaa',
+              registration_interval: '10s',
+              service_cert_domain_san: 'uaa.service.cf.internal',
+              tags: { component: 'uaa' },
+              tls_port: 8443,
+              uris: [
+                'uaa.{{ .Values.system_domain }}',
+                '*.uaa.{{ .Values.system_domain }}',
+                'login.{{ .Values.system_domain }}',
+                '*.login.{{ .Values.system_domain }}',
+              ]
+            }],
+            routing_api: {
+              ca_certs: '/run/config/ca.crt',
+              client_cert_path: '/run/config/client.crt',
+              client_private_key_path: '/run/config/client.key',
+              server_ca_cert_path: '/run/config/server_ca.crt',
+              api_url: 'https://routing-api.service.cf.internal:3001',
+              oauth_url: 'https://uaa.service.cf.internal:8443',
+              client_id: 'routing_api_client',
+              skip_ssl_validation: false,
+            }
+          }
+
+          Dir.chdir('/run/config') do
+            open('registrar_settings.json', 'w') do |f|
+              f.puts config.to_json
+            end
+          end
+        volumeMounts:
+        - name: route-registrar-config
+          mountPath: /run/config
+        - name: var-nats-password
+          mountPath: /run/secrets/var-nats-password
+      {{- end }}{{/* not .Values.features.ingress.enabled */}}
       - name: generate-log-config
         image: {{ $uaa_image }}
         command:
@@ -275,8 +373,6 @@ spec:
           }
           main
         env:
-        - name: SECRETS_DIR
-          value: /var/run/secrets
         - name: TRUSTSTORE_FILE
           value: /etc/truststore/uaa.pkcs12.truststore
         - name: TRUSTSTORE_PASSWORD
@@ -286,12 +382,6 @@ spec:
         - name: OS_CERTS_DIR
           value: /etc/ssl/certs
         volumeMounts:
-        #- name: ca-certs-files
-        #  mountPath: /var/run/secrets/ca_certs
-        #  readOnly: true
-        - name: secrets
-          mountPath: /var/run/secrets
-          readOnly: true
         - name: truststore-file
           mountPath: /etc/truststore
       containers:
@@ -325,27 +415,9 @@ spec:
         volumeMounts:
         - name: uaa-config
           mountPath: /etc/config
-        #- name: smtp-credentials-file
-        #  mountPath: /var/run/secrets/smtp_credentials.yml
-        #  subPath: smtp_credentials.yml
-        #  readOnly: true
-        #- name: database-credentials-file
-        #  mountPath: /var/run/secrets/database_credentials.yml
-        #  subPath: database_credentials.yml
-        #  readOnly: true
-        #- name: admin-client-credentials-file
-        #  mountPath: /var/run/secrets/admin_client_credentials.yml
-        #  subPath: admin_client_credentials.yml
-        #  readOnly: true
-        #- name: jwt-policy-signing-keys-file
-        #  mountPath: /var/run/secrets/jwt_policy_signing_keys.yml
-        #  subPath: jwt_policy_signing_keys.yml
-        #  readOnly: true
         - name: truststore-file
           mountPath: /etc/truststore
           readOnly: true
-        - name: secrets
-          mountPath: /var/run/secrets
         livenessProbe:
           httpGet:
             path: /healthz
@@ -367,34 +439,32 @@ spec:
         - name: nginx-config
           mountPath: /etc/nginx
           readOnly: true
+      {{- if not .Values.features.ingress.enabled }}
+      - name: route-registrar
+        image: cfcontainerization/routing:SLE_15_SP1-25.2-7.0.0_374.gb8e8e6af-0.198.0
+        command: [ /usr/bin/dumb-init, -- ]
+        args:
+        - /var/vcap/packages/route_registrar/bin/route-registrar
+        - --configPath
+        - /run/config/registrar_settings.json
+        - -timeFormat
+        - rfc3339
+        - -logLevel
+        - info
+        volumeMounts:
+        - name: route-registrar-config
+          mountPath: /run/config
+          readOnly: true
+      {{- end }}
       volumes:
-      #- name: uaa-config
-      #  configMap:
-      #    name: uaa-config
-      #- name: smtp-credentials-file
-      #  secret:
-      #    optional: true
-      #    secretName: uaa-smtp-credentials
-      #- name: database-credentials-file
-      #  secret:
-      #    optional: true
-      #    secretName: uaa-database-credentials
-      #- name: admin-client-credentials-file
-      #  secret:
-      #    secretName: uaa-admin-client-credentials
-      #- name: jwt-policy-signing-keys-file
-      #  secret:
-      #    secretName: var-uaa-jwt-signing-key
-      #- name: ca-certs-files
-      #  secret:
-      #    optional: true
-      #    secretName: uaa-ca-certs
       - name: nginx-config
         emptyDir: {}
       - name: uaa-config
         emptyDir: {}
-      - name: secrets
+      {{- if not .Values.features.ingress.enabled }}
+      - name: route-registrar-config
         emptyDir: {}
+      {{- end }}
       - name: truststore-file
         emptyDir: {}
       {{- range $secrets }}

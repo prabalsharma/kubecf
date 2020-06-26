@@ -1,4 +1,4 @@
-{{- if .Values.features.ingress.enabled }}
+{{- if and .Values.features.uaa.native .Values.features.ingress.enabled }}
 ---
 apiVersion: "extensions/v1beta1"
 kind: "Ingress"
@@ -48,6 +48,4 @@ spec:
           servicePort: 8080
   {{- end }}
 
-{{- else }}
-{{- fail "ingress is required for now" }}
 {{- end }}

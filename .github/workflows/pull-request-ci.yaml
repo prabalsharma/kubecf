@@ -11,6 +11,7 @@ jobs:
       # For catapult
       # Note that credentials-related parts are in the individual steps
       BACKEND: aks
+      AUTOSCALER: "true"
       DOWNLOAD_CATAPULT_DEPS: "false"
 
     defaults:

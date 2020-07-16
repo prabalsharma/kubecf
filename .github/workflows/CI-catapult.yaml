@@ -1,0 +1,137 @@
+name: CI-catapult
+on: push
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    env:
+      # For KubeCF
+      PINNED_TOOLS: true
+      TOOLS_DIR: ${{ github.workspace }}/tools
+      # For catapult
+      # Note that credentials-related parts are in the individual steps
+      BACKEND: aks
+      DOWNLOAD_CATAPULT_DEPS: "true"
+
+    defaults:
+      run:
+        working-directory: kubecf
+    steps:
+    - name: Checkout KubeCF
+      uses: actions/checkout@v2
+      with:
+        path: kubecf
+        submodules: recursive
+    - name: Checkout catapult
+      uses: actions/checkout@v2
+      with:
+        repository: SUSE/catapult
+        path: catapult
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+    - name: cache.tools
+      uses: actions/cache@v2
+      with:
+        path: ${{ github.workspace }}/tools
+        key: ${{ runner.os }}-tools
+    - run: make tools-install
+
+    # Run the linters; split them out so it's easier to identify which one failed
+    - run: make shellcheck
+    - run: make yamllint
+    - run: make helmlint
+
+    - name: build kubecf-bundle
+      run: |
+        make kubecf-bundle
+        ls
+        echo "----"
+        pwd
+        ls output/
+
+    - name: set kubecf-chart-bundle
+      run: |
+        echo "----"
+        pwd
+        ls output/
+        SCF_CHART="$(echo ${{ github.workspace }}/kubecf/output/kubecf-bundle-*.tgz)"
+        echo "::set-env name=SCF_CHART::${SCF_CHART}"
+        echo $SCF_CHART
+
+    - name: Start SSH agent
+      run: |
+        set -o errexit -o pipefail -o nounset
+        eval "$(ssh-agent -s)"
+        ssh-keygen -t rsa -b 4096 -N '' -C "KubeCF CI #${{ github.run_id }}" -f ssh-key
+        ssh-add ssh-key
+        SSH_PUBKEY="$(cat ssh-key.pub)"
+        echo "::add-mask::${SSH_PUBKEY}"
+        rm -f ssh-key ssh-key.pub
+        echo "::set-env name=SSH_AUTH_SOCK::${SSH_AUTH_SOCK}"
+        echo "::set-env name=SSH_AGENT_PID::${SSH_AGENT_PID}"
+
+    - name: cache.catapult-common-tools
+      uses: actions/cache@v2
+      with:
+        path: ${{ github.workspace }}/catapult/modules/common/bin
+        key: ${{ runner.os }}-catapult-common-tools
+
+    - name: set AZURE_DNS_JSON
+      run: |
+        json_file="$(mktemp)"
+        echo "$AZURE_DNS_JSON" > "${json_file}"
+        echo "::set-env name=AZURE_DNS_JSON::${json_file}"
+      env:
+        AZURE_DNS_JSON: ${{ secrets.AZURE_DNS_JSON }}
+
+    - run: |
+        echo $SCF_CHART
+        ls ${{ github.workspace }}/kubecf/output/
+        make k8s
+      working-directory: catapult
+      env:
+        AZURE_APP_ID: ${{ secrets.AZURE_APP_ID }}
+        AZURE_CLUSTER_NAME: kubecf-ci-${{ github.run_id }}
+        AZURE_DNS_RESOURCE_GROUP: ${{ secrets.AZURE_DNS_RESOURCE_GROUP }}
+        AZURE_PASSWORD: ${{ secrets.AZURE_PASSWORD }}
+        AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}-${{ github.run_id }}
+        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        OWNER: ${{ github.repository_owner }}
+
+    - name: show KUBECONFIG
+      run: |
+        set -o errexit -o nounset -o pipefail
+        cd "build${BACKEND}"
+        cat kubeconfig | base64 --wrap=0
+      working-directory: catapult
+
+    - name: deploy kubecf-bundle
+      working-directory: catapult
+      run: |
+        echo $SCF_CHART
+        ls ${{ github.workspace }}/kubecf/output/
+        set -o errexit -o nounset -o pipefail
+        source "build${BACKEND}"/.envrc
+        kubectl get pods --all-namespaces
+        make kubecf
+
+    - name: cf-login
+      working-directory: catapult
+      run: |
+        kubectl get pods --all-namespaces
+        make kubecf-login
+
+    - name: kubernetes:teardown
+      if: always()
+      run: make clean
+      working-directory: catapult
+      env:
+        AZURE_APP_ID: ${{ secrets.AZURE_APP_ID }}
+        AZURE_CLUSTER_NAME: kubecf-ci-${{ github.run_id }}
+        AZURE_DNS_RESOURCE_GROUP: ${{ secrets.AZURE_DNS_RESOURCE_GROUP }}
+        AZURE_PASSWORD: ${{ secrets.AZURE_PASSWORD }}
+        AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}-${{ github.run_id }}
+        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}

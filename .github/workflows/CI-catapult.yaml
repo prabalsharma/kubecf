@@ -11,6 +11,7 @@ jobs:
       # For catapult
       # Note that credentials-related parts are in the individual steps
       BACKEND: aks
+      AUTOSCALER: "false"
       DOWNLOAD_CATAPULT_DEPS: "true"
 
     defaults:
@@ -45,16 +46,9 @@ jobs:
     - name: build kubecf-bundle
       run: |
         make kubecf-bundle
-        ls
-        echo "----"
-        pwd
-        ls output/
 
     - name: set kubecf-chart-bundle
       run: |
-        echo "----"
-        pwd
-        ls output/
         SCF_CHART="$(echo ${{ github.workspace }}/kubecf/output/kubecf-bundle-*.tgz)"
         echo "::set-env name=SCF_CHART::${SCF_CHART}"
         echo $SCF_CHART
@@ -85,10 +79,7 @@ jobs:
       env:
         AZURE_DNS_JSON: ${{ secrets.AZURE_DNS_JSON }}
 
-    - run: |
-        echo $SCF_CHART
-        ls ${{ github.workspace }}/kubecf/output/
-        make k8s
+    - run: make k8s
       working-directory: catapult
       env:
         AZURE_APP_ID: ${{ secrets.AZURE_APP_ID }}
@@ -110,8 +101,6 @@ jobs:
     - name: deploy kubecf-bundle
       working-directory: catapult
       run: |
-        echo $SCF_CHART
-        ls ${{ github.workspace }}/kubecf/output/
         set -o errexit -o nounset -o pipefail
         source "build${BACKEND}"/.envrc
         kubectl get pods --all-namespaces
@@ -120,6 +109,8 @@ jobs:
     - name: cf-login
       working-directory: catapult
       run: |
+        set -o errexit -o nounset -o pipefail
+        source "build${BACKEND}"/.envrc
         kubectl get pods --all-namespaces
         make kubecf-login
 

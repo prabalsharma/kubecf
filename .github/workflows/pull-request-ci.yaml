@@ -187,7 +187,7 @@ jobs:
           echo "$GKE_CRED_JSON" > "${json_file}"
           echo "::set-env name=GKE_CRED_JSON::${json_file}"
         env:
-          GKE_CRED_JSON: ${{ secrets.GKE_CREDS_JSON }}
+          GKE_CRED_JSON: ${{ secrets.GKE_CRED_JSON }}
 
       # Cache catapult's common tools
       - name: cache.catapult-common-tools

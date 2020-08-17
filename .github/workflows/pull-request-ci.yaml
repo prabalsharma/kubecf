@@ -1,10 +1,10 @@
 name: CI
-on:
+on: push
   # Trigger the workflow on pull request,
   # but only for the master branch
-  pull_request:
-    branches:
-      - master
+  # pull_request:
+  #   branches:
+  #     - master
 jobs:
   lint:
     name: lint
@@ -202,7 +202,7 @@ jobs:
         env:
           GKE_CLUSTER_NAME: kubecf-ci-${{ github.run_id }}-${{ matrix.backend }}
           OWNER: ${{ github.repository_owner }}
-          DEBUG_MODE: false
+          DEBUG_MODE: true
           GKE_NODE_COUNT: 1
           GKE_PREEMPTIBLE: true
           GKE_INSTANCE_TYPE: n1-highcpu-16
